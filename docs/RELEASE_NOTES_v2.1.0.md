@@ -1,4 +1,4 @@
-# Agent Avenue AI Lab — Public 2.1.0
+# Agent Avenue AI — Public 2.1.0
 
 First public Windows release of the training and human-vs-AI application.
 

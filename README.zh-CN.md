@@ -1,4 +1,4 @@
-# 疯狂特务城 AI 训练室（公开版）
+# 疯狂特务城 · 模型训练与人机对战（公开版）
 
 [English](README.md) · [模型评测](docs/EVALUATION.md) · [架构说明](docs/ARCHITECTURE.md) · [项目分工](PROJECT_ROLE.md)
 

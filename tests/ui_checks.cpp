@@ -7,7 +7,7 @@ void drawArt(HDC dc,int i,int x,int y,int w,int h){
 }
 void render(const std::string&path){
  svg.str("");svg.clear();hits.clear();clipId=0;svg<<"<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='1180' height='940' viewBox='0 0 1180 940'>";
- box(0,{0,0,1180,940},bg,bg,0);textAt(0,30,24,740,46,L"疯狂特务城 · AI 训练室",titleFont);
+ box(0,{0,0,1180,940},bg,bg,0);textAt(0,30,24,740,46,L"疯狂特务城 · 模型训练与人机对战",titleFont);
  textAt(0,831,37,319,26,L"Public 2.1.0",smallFont,muted,DT_RIGHT|DT_SINGLELINE);
  button(0,30,82,170,35,L"训练与评测",1,true,tab==0);button(0,211,82,170,35,L"人机对战",2,true,tab==1);button(0,392,82,170,35,L"规则与存档",3,true,tab==2);
  if(tab==0)drawTrain(0);else if(tab==1)drawPlay(0);else drawHelp(0);drawInspector(0);svg<<"</svg>";std::ofstream(path)<<svg.str();

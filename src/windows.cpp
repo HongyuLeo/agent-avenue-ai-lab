@@ -265,7 +265,7 @@ void drawHelp(HDC dc){
 void paint(HWND hwnd){
  PAINTSTRUCT ps;HDC target=BeginPaint(hwnd,&ps);RECT client;GetClientRect(hwnd,&client);HDC dc=CreateCompatibleDC(target);HBITMAP bitmap=CreateCompatibleBitmap(target,1180,CANVAS_H);auto old=SelectObject(dc,bitmap);
  HBRUSH brush=CreateSolidBrush(bg);RECT canvas{0,0,1180,CANVAS_H};FillRect(dc,&canvas,brush);DeleteObject(brush);hits.clear();
- textAt(dc,30,24,740,46,L"疯狂特务城 · AI 训练室",titleFont);textAt(dc,831,37,319,26,L"Agent Avenue AI Lab  /  Public 2.1.0",smallFont,muted,DT_RIGHT|DT_SINGLELINE);
+ textAt(dc,30,24,740,46,L"疯狂特务城 · 模型训练与人机对战",titleFont);textAt(dc,831,37,319,26,L"Agent Avenue AI  /  Public 2.1.0",smallFont,muted,DT_RIGHT|DT_SINGLELINE);
  button(dc,30,82,170,35,L"训练与评测",1,true,tab==0);button(dc,211,82,170,35,L"人机对战",2,true,tab==1);button(dc,392,82,170,35,L"规则与存档",3,true,tab==2);
  if(tab==0)drawTrain(dc);else if(tab==1)drawPlay(dc);else drawHelp(dc);drawInspector(dc);
  double sc=std::min(client.right/1180.0,client.bottom/double(CANVAS_H));int dw=int(1180*sc),dh=int(CANVAS_H*sc),ox=(client.right-dw)/2,oy=(client.bottom-dh)/2;
@@ -319,7 +319,7 @@ void background(){
  }catch(const std::exception&e){running=false;busyEval=false;std::string s=e.what();{std::lock_guard<std::mutex>lock(mx);statusText=L"保存或训练失败："+std::wstring(s.begin(),s.end());}PostMessageW(windowHandle,WM_APP+2,0,0);}
 }
 void exportLog(){
- std::wstring text=L"Agent Avenue AI Lab 对局公开记录（v2.1.0）\r\n";for(auto&v:gameLog)text+=v+L"\r\n";
+ std::wstring text=L"Agent Avenue AI 对局公开记录（v2.1.0）\r\n";for(auto&v:gameLog)text+=v+L"\r\n";
  text+=L"\r\n最终公开招募数：\r\n";for(int k=0;k<K;k++)text+=std::wstring(names[k])+L"：你 "+num(duel.pile[0][k])+L" / AI "+num(duel.pile[1][k])+L"\r\n";
  int n=WideCharToMultiByte(CP_UTF8,0,text.data(),int(text.size()),nullptr,0,nullptr,nullptr);std::string bytes(n,0);WideCharToMultiByte(CP_UTF8,0,text.data(),int(text.size()),bytes.data(),n,nullptr,nullptr);
  auto path=saveDir/L"last-game.txt";std::ofstream out(path,std::ios::binary);out<<"\xef\xbb\xbf"<<bytes;out.close();require(bool(out),"Cannot export game log");ShellExecuteW(windowHandle,L"open",path.c_str(),nullptr,nullptr,SW_SHOWNORMAL);
@@ -372,7 +372,7 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
   if(worker.joinable())worker.join();threadFailed=true;
   if(closing){if(MessageBoxW(hwnd,(status+L"\n是否退出并保留最近一次成功保存的进度？").c_str(),L"无法保存",MB_YESNO|MB_ICONERROR)==IDYES){DestroyWindow(hwnd);return 0;}}
   else MessageBoxW(hwnd,(status+L"\n请检查存档目录的空间与权限。已存在的存档保留；解决问题后可点击继续训练重试。").c_str(),L"训练 / 存档错误",MB_ICONERROR);
-  closing=false;quit=false;SetWindowTextW(hwnd,L"疯狂特务城 AI 训练室");return 0;}
+  closing=false;quit=false;SetWindowTextW(hwnd,L"疯狂特务城 · 模型训练与人机对战");return 0;}
  case WM_DESTROY:PostQuitMessage(0);return 0;
  }return DefWindowProcW(hwnd,msg,wp,lp);
 }
@@ -393,7 +393,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
   WNDCLASSW wc{};wc.lpfnWndProc=proc;wc.hInstance=instance;wc.lpszClassName=L"AgentAvenueAIWindow";wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);wc.hIcon=LoadIconW(nullptr,IDI_APPLICATION);RegisterClassW(&wc);
   initArt();
   RECT frame{0,0,1180,CANVAS_H};AdjustWindowRect(&frame,WS_OVERLAPPEDWINDOW,FALSE);
-  windowHandle=CreateWindowW(wc.lpszClassName,L"疯狂特务城 AI 训练室",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,std::min(frame.right-frame.left,LONG(GetSystemMetrics(SM_CXSCREEN)-60)),std::min(frame.bottom-frame.top,LONG(GetSystemMetrics(SM_CYSCREEN)-90)),nullptr,nullptr,instance,nullptr);require(windowHandle!=nullptr,"Cannot create window");
+  windowHandle=CreateWindowW(wc.lpszClassName,L"疯狂特务城 · 模型训练与人机对战",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,std::min(frame.right-frame.left,LONG(GetSystemMetrics(SM_CXSCREEN)-60)),std::min(frame.bottom-frame.top,LONG(GetSystemMetrics(SM_CYSCREEN)-90)),nullptr,nullptr,instance,nullptr);require(windowHandle!=nullptr,"Cannot create window");
   ShowWindow(windowHandle,show);SetTimer(windowHandle,1,40,nullptr);SetTimer(windowHandle,2,500,nullptr);worker=std::thread(background);
   MSG msg;while(GetMessageW(&msg,nullptr,0,0)>0){TranslateMessage(&msg);DispatchMessageW(&msg);}quit=true;if(worker.joinable())worker.join();
   freeArt();DeleteObject(smallFont);DeleteObject(normalFont);DeleteObject(boldFont);DeleteObject(titleFont);DeleteObject(numberFont);CloseHandle(singleton);return 0;

@@ -1,8 +1,10 @@
-# Agent Avenue AI Lab
+# Agent Avenue AI / 疯狂特务城 · 模型训练与人机对战
 
-[简体中文](README.zh-CN.md) · [Evaluation](docs/EVALUATION.md) · [Architecture](docs/ARCHITECTURE.md) · [Project role](PROJECT_ROLE.md)
+[English details](#highlights) · [简体中文完整说明](README.zh-CN.md) · [Evaluation](docs/EVALUATION.md) · [Architecture](docs/ARCHITECTURE.md) · [Project role](PROJECT_ROLE.md)
 
-An unofficial, open-source C++17 self-play reinforcement-learning project for the standard two-player base game of *Agent Avenue*. It provides a Windows desktop application for continued training, checkpoint-safe resume, model evaluation, and human-vs-AI play.
+**English:** An unofficial, open-source C++17 self-play reinforcement-learning project for the standard two-player base game of *Agent Avenue*. It provides a Windows desktop application for continued training, checkpoint-safe resume, model evaluation, and human-vs-AI play.
+
+**简体中文：** 一个面向《疯狂特务城》（*Agent Avenue*）标准双人基础玩法的开源桌游 AI 项目。项目使用 C++17 实现隐藏信息博弈和自对弈强化学习，提供 CUDA 加速训练、断点续训、模型评测，以及带原创角色插画的 Windows 可视化人机对战程序。[阅读完整中文说明 →](README.zh-CN.md)
 
 ![Human versus AI interface with original illustrated cards](docs/screenshots/play-ui.png)
 
