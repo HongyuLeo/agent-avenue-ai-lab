@@ -18,7 +18,12 @@ add_test(NAME fast_checks COMMAND fast_checks)
 if(WIN32)
   add_executable(agent_avenue_ai_lab WIN32 src/windows.cpp)
   target_compile_definitions(agent_avenue_ai_lab PRIVATE UNICODE _UNICODE)
-  target_link_libraries(agent_avenue_ai_lab PRIVATE gdi32 user32 shell32 Threads::Threads)
+  target_link_libraries(agent_avenue_ai_lab PRIVATE gdi32 user32 shell32 gdiplus Threads::Threads)
+  add_custom_command(TARGET agent_avenue_ai_lab POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/assets/cards"
+            "$<TARGET_FILE_DIR:agent_avenue_ai_lab>/assets/cards"
+    COMMENT "Copying original card artwork")
   if(MSVC)
     target_compile_options(agent_avenue_ai_lab PRIVATE /utf-8 /O2)
     target_link_options(agent_avenue_ai_lab PRIVATE /STACK:8388608)

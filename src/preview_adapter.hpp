@@ -24,7 +24,7 @@ inline void textAt(HDC,int x,int y,int w,int h,const std::wstring&s,HFONT f=norm
  int id=clipId++;svg<<"<clipPath id='c"<<id<<"'><rect x='"<<x<<"' y='"<<y<<"' width='"<<w<<"' height='"<<h<<"'/></clipPath><g clip-path='url(#c"<<id<<")'>";
  int yy=y+size;if(flags&DT_VCENTER)yy=y+(h-size)/2+size-2;
  for(const auto&v:lines){int xx=x;const char* anchor="start";if(flags&DT_CENTER){xx=x+w/2;anchor="middle";}else if(flags&DT_RIGHT){xx=x+w;anchor="end";}
-  svg<<"<text x='"<<xx<<"' y='"<<yy<<"' text-anchor='"<<anchor<<"' font-family='Noto Sans CJK SC' font-size='"<<size<<"' font-weight='"<<(f>=1000?600:400)<<"' fill='"<<color(c)<<"'>"<<xml(v)<<"</text>";yy+=lineH;}
+  svg<<"<text x='"<<xx<<"' y='"<<yy<<"' text-anchor='"<<anchor<<"' font-family='Noto Sans CJK SC,sans-serif' font-size='"<<size<<"' font-weight='"<<(f>=1000?600:400)<<"' fill='"<<color(c)<<"'>"<<xml(v)<<"</text>";yy+=lineH;}
  svg<<"</g>";
 }
 inline void box(HDC,RECT r,COLORREF fill,COLORREF border,int radius=14){svg<<"<rect x='"<<r.left<<"' y='"<<r.top<<"' width='"<<r.right-r.left<<"' height='"<<r.bottom-r.top<<"' rx='"<<radius/2<<"' fill='"<<color(fill)<<"' stroke='"<<color(border)<<"'/>";}

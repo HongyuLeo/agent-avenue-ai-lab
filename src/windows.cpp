@@ -4,6 +4,7 @@
 #ifndef AA_PREVIEW
 #include <shellapi.h>
 #include <shlobj.h>
+#include <gdiplus.h>
 #else
 #include "preview_adapter.hpp"
 #endif
@@ -49,11 +50,21 @@ void box(HDC dc,RECT r,COLORREF fill,COLORREF border,int radius=14){
  HBRUSH b=CreateSolidBrush(fill);HPEN p=CreatePen(PS_SOLID,1,border);auto ob=SelectObject(dc,b);auto op=SelectObject(dc,p);RoundRect(dc,r.left,r.top,r.right,r.bottom,radius,radius);SelectObject(dc,ob);SelectObject(dc,op);DeleteObject(b);DeleteObject(p);
 }
 void line(HDC dc,int x,int y,int x2,int y2,COLORREF color,int width=1){HPEN p=CreatePen(PS_SOLID,width,color);auto old=SelectObject(dc,p);MoveToEx(dc,x,y,nullptr);LineTo(dc,x2,y2);SelectObject(dc,old);DeleteObject(p);}
-void initArt(){}
-void freeArt(){}
+ULONG_PTR gdipToken=0;Gdiplus::Image* cardArt[K]{};
+void initArt(){
+ Gdiplus::GdiplusStartupInput input;if(Gdiplus::GdiplusStartup(&gdipToken,&input,nullptr)!=Gdiplus::Ok)return;
+ wchar_t executable[MAX_PATH]{};DWORD len=GetModuleFileNameW(nullptr,executable,MAX_PATH);if(!len||len>=MAX_PATH)return;
+ fs::path root=fs::path(executable).parent_path()/L"assets"/L"cards";
+ const wchar_t* files[K]={L"double-agent.png",L"enforcer.png",L"codebreaker.png",L"saboteur.png",L"daredevil.png",L"sentinel.png",L"sidekick.png",L"mole.png"};
+ for(int i=0;i<K;i++){auto path=root/files[i];cardArt[i]=Gdiplus::Image::FromFile(path.c_str());if(cardArt[i]&&cardArt[i]->GetLastStatus()!=Gdiplus::Ok){delete cardArt[i];cardArt[i]=nullptr;}}
+}
+void freeArt(){for(auto&image:cardArt){delete image;image=nullptr;}if(gdipToken)Gdiplus::GdiplusShutdown(gdipToken);}
 void drawArt(HDC dc,int i,int x,int y,int w,int h){
  if(i<0||i>=10)return;
  if(i<8){
+  if(cardArt[i]){Gdiplus::Graphics g(dc);g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
+   int iw=cardArt[i]->GetWidth(),ih=cardArt[i]->GetHeight(),cropH=std::min(ih,int(iw*double(h)/w)),cropY=(ih-cropH)/2;
+   g.DrawImage(cardArt[i],Gdiplus::Rect(x,y,w,h),0,cropY,iw,cropH,Gdiplus::UnitPixel);return;}
   box(dc,{x,y,x+w,y+h},RGB(248,250,253),accent[i],14);box(dc,{x+8,y+8,x+w-8,y+h-8},white,RGB(229,234,241),10);
   int d=std::min(w-24,h/2);box(dc,{x+(w-d)/2,y+20,x+(w+d)/2,y+20+d},accent[i],accent[i],d);
   const wchar_t*mark[K]={L"DA",L"EN",L"CB",L"SA",L"DD",L"SE",L"SK",L"MO"};
@@ -237,7 +248,7 @@ void drawInspector(HDC dc){
  if(supply[k]==1)textAt(dc,535,383,407,61,L"整副牌只有这一张，没有第 2、3 档效果。",normalFont,muted);
  if(haveGame)textAt(dc,535,557,407,81,L"当前已招募：\n你 "+num(duel.pile[0][k])+L" 张　/　AI "+num(duel.pile[1][k])+L" 张",boldFont);
  textAt(dc,233,656,710,164,L"双方移动结束后，再统一检查胜负。\n如果同轮出现获胜与失败条件冲突，按官方规则由本轮出牌方获胜。\n你和 AI 的牌分别计算，不把双方数量相加。",normalFont,muted);
- textAt(dc,233,839,714,25,L"公开版使用原创程序化卡面；不包含原作美术资产。",smallFont,muted);
+ textAt(dc,233,839,714,25,L"公开版使用本项目原创角色插画；不包含原作美术资产。",smallFont,muted);
 }
 void drawHelp(HDC dc){
  box(dc,{30,130,1150,765},white,white);

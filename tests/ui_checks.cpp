@@ -1,12 +1,12 @@
 #define AA_PREVIEW
 #include "../src/windows.cpp"
 void drawArt(HDC dc,int i,int x,int y,int w,int h){
- if(i<8){box(dc,{x,y,x+w,y+h},RGB(248,250,253),accent[i],14);int d=std::min(w-20,h/2);box(dc,{x+(w-d)/2,y+16,x+(w+d)/2,y+16+d},accent[i],accent[i],d);const wchar_t*m[K]={L"DA",L"EN",L"CB",L"SA",L"DD",L"SE",L"SK",L"MO"};textAt(dc,x+(w-d)/2,y+16,d,d,m[i],titleFont,white,DT_CENTER|DT_VCENTER|DT_SINGLELINE);textAt(dc,x+4,y+h-28,w-8,20,english[i],smallFont,accent[i],DT_CENTER|DT_SINGLELINE);return;}
+ if(i<8){const char*files[K]={"double-agent.png","enforcer.png","codebreaker.png","saboteur.png","daredevil.png","sentinel.png","sidekick.png","mole.png"};auto root=fs::current_path();if(!fs::exists(root/"assets"/"cards"))root=fs::absolute(fs::path(__FILE__)).parent_path().parent_path();auto path=(root/"assets"/"cards"/files[i]).generic_string();svg<<"<image x='"<<x<<"' y='"<<y<<"' width='"<<w<<"' height='"<<h<<"' preserveAspectRatio='xMidYMid slice' xlink:href='file://"<<path<<"'/>";return;}
  if(i==8){box(dc,{x,y,x+w,y+h},RGB(31,57,91),white,14);textAt(dc,x+5,y+h/2-15,w-10,30,L"AGENT AI",boldFont,white,DT_CENTER|DT_SINGLELINE);return;}
  box(dc,{x,y,x+w,y+h},RGB(246,248,251),RGB(196,207,220),18);int p[14][2]={{12,50},{12,28},{20,8},{43,5},{66,5},{88,9},{93,30},{93,52},{93,73},{88,93},{66,97},{43,97},{18,93},{12,72}};for(int n=0;n<14;n++){int j=(n+1)%14;line(dc,x+p[n][0]*w/100,y+p[n][1]*h/100,x+p[j][0]*w/100,y+p[j][1]*h/100,RGB(170,184,202),3);box(dc,{x+p[n][0]*w/100-9,y+p[n][1]*h/100-9,x+p[n][0]*w/100+10,y+p[n][1]*h/100+10},white,RGB(154,171,193),18);}
 }
 void render(const std::string&path){
- svg.str("");svg.clear();hits.clear();clipId=0;svg<<"<svg xmlns='http://www.w3.org/2000/svg' width='1180' height='940' viewBox='0 0 1180 940'>";
+ svg.str("");svg.clear();hits.clear();clipId=0;svg<<"<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='1180' height='940' viewBox='0 0 1180 940'>";
  box(0,{0,0,1180,940},bg,bg,0);textAt(0,30,24,740,46,L"疯狂特务城 · AI 训练室",titleFont);
  textAt(0,831,37,319,26,L"Public 2.1.0",smallFont,muted,DT_RIGHT|DT_SINGLELINE);
  button(0,30,82,170,35,L"训练与评测",1,true,tab==0);button(0,211,82,170,35,L"人机对战",2,true,tab==1);button(0,392,82,170,35,L"规则与存档",3,true,tab==2);
@@ -15,6 +15,7 @@ void render(const std::string&path){
 int main(int argc,char**argv){
  smallFont=16;normalFont=19;boldFont=1020;titleFont=1029;numberFont=1037;tab=1;
  std::string dest=argc>1?argv[1]:"/tmp/aa-preview";fs::create_directories(dest);
+ haveGame=false;render(dest+"/gallery.svg");
  newGame(false);render(dest+"/hand.svg");
  auto l=legal(duel.observe(0));applyDuel(l[0]);render(dest+"/own-offer.svg");
  newGame(true);applyDuel(legal(duel.observe(1))[0]);

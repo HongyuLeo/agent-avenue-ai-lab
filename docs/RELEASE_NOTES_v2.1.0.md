@@ -7,7 +7,7 @@ First public Windows release of the training and human-vs-AI application.
 - pretrained checkpoint with 17,366,354 self-play games;
 - human-vs-AI play with visible outcome explanations;
 - resumable CPU/CUDA training and automatic checkpoint saving;
-- original programmatic card and board visuals;
+- eight original illustrated agents and a programmatic board visualization;
 - fix and regression coverage for third-Daredevil loss resolution;
 - independent 5,000-game evaluations against random, heuristic, and champion opponents.
 

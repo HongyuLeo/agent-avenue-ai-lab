@@ -4,7 +4,7 @@
 
 An unofficial, open-source C++17 self-play reinforcement-learning project for the standard two-player base game of *Agent Avenue*. It provides a Windows desktop application for continued training, checkpoint-safe resume, model evaluation, and human-vs-AI play.
 
-![Human versus AI interface](docs/screenshots/play-ui.svg)
+![Human versus AI interface with original illustrated cards](docs/screenshots/play-ui.png)
 
 ## Highlights
 
@@ -13,8 +13,10 @@ An unofficial, open-source C++17 self-play reinforcement-learning project for th
 - Parallel CPU self-play plus an optional CUDA gradient backend loaded dynamically through the NVIDIA Driver API and NVRTC.
 - Atomic checkpoints, checksum validation, `.bak` recovery, and exact resume of model, optimizer, RNG, and partial batch state.
 - Human-vs-AI play with public information, outcome explanations, card inspection, and first-player switching.
-- Original programmatic card and board visuals. No commercial game artwork is included.
+- Eight original illustrated agents plus a programmatic board. No commercial game artwork is included.
 - Regression tests for rule outcomes, hidden-information isolation, serialization, gradients, UI transitions, and the reported third-Daredevil scenario.
+
+![Active human-versus-AI game with illustrated cards](docs/screenshots/active-play.png)
 
 ## Trained checkpoint
 
@@ -67,7 +69,7 @@ This repository implements only the standard two-player base mode. It does not i
 
 ## Authorship and AI disclosure
 
-Project direction, rules analysis, training operation, defect discovery, evaluation decisions, and release ownership are by **Liu Hongyu**. AI coding tools assisted with implementation, refactoring, test scaffolding, and documentation under his direction and review. See [PROJECT_ROLE.md](PROJECT_ROLE.md) for the detailed and portfolio-ready statement.
+Project direction, rules analysis, training operation, defect discovery, evaluation decisions, visual direction, and release ownership are by **Liu Hongyu**. AI tools assisted with implementation, refactoring, test scaffolding, documentation, and generation of the project's original card illustrations under his direction and review. See [PROJECT_ROLE.md](PROJECT_ROLE.md) for the detailed and portfolio-ready statement.
 
 ## Legal notice
 
