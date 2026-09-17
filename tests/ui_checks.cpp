@@ -8,7 +8,7 @@ void drawArt(HDC dc,int i,int x,int y,int w,int h){
 void render(const std::string&path){
  svg.str("");svg.clear();hits.clear();clipId=0;svg<<"<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='1180' height='940' viewBox='0 0 1180 940'>";
  box(0,{0,0,1180,940},bg,bg,0);textAt(0,30,24,780,46,text(L"疯狂特务城 · 模型训练与人机对战",L"Agent Avenue AI · Training and Play",L"Agent Avenue IA · Entrenamiento y partida"),titleFont);
- textAt(0,831,37,319,26,L"Public 2.2.0",smallFont,muted,DT_RIGHT|DT_SINGLELINE);
+ textAt(0,831,37,319,26,L"Public 2.2.1",smallFont,muted,DT_RIGHT|DT_SINGLELINE);
  button(0,30,82,180,35,text(L"训练与评测",L"Training",L"Entrenar"),1,true,tab==0);button(0,220,82,180,35,text(L"人机对战",L"Play vs AI",L"Jugar vs IA"),2,true,tab==1);button(0,410,82,180,35,text(L"规则与存档",L"Rules & saves",L"Reglas y datos"),3,true,tab==2);
  textAt(0,580,89,165,24,text(L"语言 / Language",L"Language",L"Idioma"),smallFont,muted,DT_RIGHT|DT_SINGLELINE);
  button(0,754,82,83,35,L"中文",4,true,language.load()==0);button(0,846,82,130,35,L"English",5,true,language.load()==1);button(0,985,82,165,35,L"Español",6,true,language.load()==2);

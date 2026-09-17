@@ -34,7 +34,7 @@
 ## 普通玩家如何使用
 
 1. 进入本仓库的 **Releases** 页面；
-2. 下载 `AgentAvenueAI-Public-v2.2.0-Windows.zip`；
+2. 下载 `AgentAvenueAI-Public-v2.2.1-Windows.zip`；
 3. 解压整个压缩包，双击 `AgentAvenueAI.exe`；
 4. 点击“人机对战”。首次启动会自动导入压缩包内的预训练模型。
 

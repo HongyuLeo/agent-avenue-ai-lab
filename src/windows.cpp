@@ -91,7 +91,13 @@ void drawArt(HDC dc,int i,int x,int y,int w,int h){
   textAt(dc,x+6,y+h-27,w-12,20,L"AI LAB",smallFont,muted,DT_CENTER|DT_SINGLELINE);return;
  }
  if(i==8){
-  box(dc,{x,y,x+w,y+h},RGB(31,57,91),RGB(20,39,66),14);for(int n=-h;n<w;n+=24)line(dc,x+n,y,x+n+h,y+h,RGB(52,85,126),5);
+  box(dc,{x,y,x+w,y+h},RGB(31,57,91),RGB(20,39,66),14);
+  // The diagonal card-back pattern starts outside the card so it covers the
+  // whole surface. Clip it to the card bounds or GDI draws those lines across
+  // the surrounding offer panel as well.
+  int savedDc=SaveDC(dc);IntersectClipRect(dc,x+1,y+1,x+w-1,y+h-1);
+  for(int n=-h;n<w;n+=24)line(dc,x+n,y,x+n+h,y+h,RGB(52,85,126),5);
+  RestoreDC(dc,savedDc);
   box(dc,{x+12,y+12,x+w-12,y+h-12},RGB(31,57,91),white,10);textAt(dc,x+10,y+h/2-35,w-20,34,L"AGENT",boldFont,white,DT_CENTER|DT_SINGLELINE);textAt(dc,x+10,y+h/2+4,w-20,28,L"AVENUE AI",smallFont,RGB(186,210,239),DT_CENTER|DT_SINGLELINE);return;
  }
  box(dc,{x,y,x+w,y+h},RGB(246,248,251),RGB(196,207,220),18);int pts[14][2]={{12,50},{12,28},{20,8},{43,5},{66,5},{88,9},{93,30},{93,52},{93,73},{88,93},{66,97},{43,97},{18,93},{12,72}};
@@ -341,7 +347,7 @@ void chooseLanguage(Language value){language=int(value);saveLanguage();SetWindow
 void paint(HWND hwnd){
  PAINTSTRUCT ps;HDC target=BeginPaint(hwnd,&ps);RECT client;GetClientRect(hwnd,&client);HDC dc=CreateCompatibleDC(target);HBITMAP bitmap=CreateCompatibleBitmap(target,1180,CANVAS_H);auto old=SelectObject(dc,bitmap);
  HBRUSH brush=CreateSolidBrush(bg);RECT canvas{0,0,1180,CANVAS_H};FillRect(dc,&canvas,brush);DeleteObject(brush);hits.clear();
- textAt(dc,30,24,780,46,appTitle(),titleFont);textAt(dc,831,37,319,26,L"Agent Avenue AI  /  Public 2.2.0",smallFont,muted,DT_RIGHT|DT_SINGLELINE);
+ textAt(dc,30,24,780,46,appTitle(),titleFont);textAt(dc,831,37,319,26,L"Agent Avenue AI  /  Public 2.2.1",smallFont,muted,DT_RIGHT|DT_SINGLELINE);
  button(dc,30,82,180,35,text(L"训练与评测",L"Training",L"Entrenar"),1,true,tab==0);button(dc,220,82,180,35,text(L"人机对战",L"Play vs AI",L"Jugar vs IA"),2,true,tab==1);button(dc,410,82,180,35,text(L"规则与存档",L"Rules & saves",L"Reglas y datos"),3,true,tab==2);
  textAt(dc,580,89,165,24,text(L"语言 / Language",L"Language",L"Idioma"),smallFont,muted,DT_RIGHT|DT_SINGLELINE);
  button(dc,754,82,83,35,L"中文",4,true,language.load()==0);button(dc,846,82,130,35,L"English",5,true,language.load()==1);button(dc,985,82,165,35,L"Español",6,true,language.load()==2);
@@ -403,7 +409,7 @@ void background(){
  }catch(const std::exception&e){running=false;busyEval=false;std::string s=e.what();std::wstring ws(s.begin(),s.end());{std::lock_guard<std::mutex>lock(mx);statusText={L"保存或训练失败："+ws,L"Save or training failed: "+ws,L"Falló el guardado o entrenamiento: "+ws};}PostMessageW(windowHandle,WM_APP+2,0,0);}
 }
 void exportLog(){
- std::wstring logText=text(L"Agent Avenue AI 对局公开记录（v2.2.0）\r\n",L"Agent Avenue AI public game log (v2.2.0)\r\n",L"Registro público de partida de Agent Avenue IA (v2.2.0)\r\n");for(auto&v:gameLog)logText+=v.get()+L"\r\n";
+ std::wstring logText=text(L"Agent Avenue AI 对局公开记录（v2.2.1）\r\n",L"Agent Avenue AI public game log (v2.2.1)\r\n",L"Registro público de partida de Agent Avenue IA (v2.2.1)\r\n");for(auto&v:gameLog)logText+=v.get()+L"\r\n";
  logText+=text(L"\r\n最终公开招募数：\r\n",L"\r\nFinal recruited cards:\r\n",L"\r\nCartas reclutadas al final:\r\n");for(int k=0;k<K;k++)logText+=cardName(k)+text(L"：你 ",L": you ",L": tú ")+num(duel.pile[0][k])+L" / AI "+num(duel.pile[1][k])+L"\r\n";
  int n=WideCharToMultiByte(CP_UTF8,0,logText.data(),int(logText.size()),nullptr,0,nullptr,nullptr);std::string bytes(n,0);WideCharToMultiByte(CP_UTF8,0,logText.data(),int(logText.size()),bytes.data(),n,nullptr,nullptr);
  auto path=saveDir/L"last-game.txt";std::ofstream out(path,std::ios::binary);out<<"\xef\xbb\xbf"<<bytes;out.close();require(bool(out),"Cannot export game log");ShellExecuteW(windowHandle,L"open",path.c_str(),nullptr,nullptr,SW_SHOWNORMAL);

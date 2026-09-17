@@ -36,7 +36,7 @@ See [docs/EVALUATION.md](docs/EVALUATION.md) for protocol and limitations.
 ## Download and play on Windows
 
 1. Open the repository's **Releases** page.
-2. Download `AgentAvenueAI-Public-v2.2.0-Windows.zip`.
+2. Download `AgentAvenueAI-Public-v2.2.1-Windows.zip`.
 3. Extract the whole archive and run `AgentAvenueAI.exe`.
 4. Open **人机对战 / Play vs AI / Jugar vs IA** to play. The included `training.bin` is imported automatically on first launch.
 
