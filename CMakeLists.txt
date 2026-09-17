@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(agent_avenue_ai_lab VERSION 2.1.0 LANGUAGES CXX)
+project(agent_avenue_ai_lab VERSION 2.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,6 +23,9 @@ if(WIN32)
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_SOURCE_DIR}/assets/cards"
             "$<TARGET_FILE_DIR:agent_avenue_ai_lab>/assets/cards"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/models/pretrained-17m.bin"
+            "$<TARGET_FILE_DIR:agent_avenue_ai_lab>/training.bin"
     COMMENT "Copying original card artwork")
   if(MSVC)
     target_compile_options(agent_avenue_ai_lab PRIVATE /utf-8 /O2)

@@ -7,15 +7,20 @@ void drawArt(HDC dc,int i,int x,int y,int w,int h){
 }
 void render(const std::string&path){
  svg.str("");svg.clear();hits.clear();clipId=0;svg<<"<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='1180' height='940' viewBox='0 0 1180 940'>";
- box(0,{0,0,1180,940},bg,bg,0);textAt(0,30,24,740,46,L"疯狂特务城 · 模型训练与人机对战",titleFont);
- textAt(0,831,37,319,26,L"Public 2.1.0",smallFont,muted,DT_RIGHT|DT_SINGLELINE);
- button(0,30,82,170,35,L"训练与评测",1,true,tab==0);button(0,211,82,170,35,L"人机对战",2,true,tab==1);button(0,392,82,170,35,L"规则与存档",3,true,tab==2);
+ box(0,{0,0,1180,940},bg,bg,0);textAt(0,30,24,780,46,text(L"疯狂特务城 · 模型训练与人机对战",L"Agent Avenue AI · Training and Play",L"Agent Avenue IA · Entrenamiento y partida"),titleFont);
+ textAt(0,831,37,319,26,L"Public 2.2.0",smallFont,muted,DT_RIGHT|DT_SINGLELINE);
+ button(0,30,82,180,35,text(L"训练与评测",L"Training",L"Entrenar"),1,true,tab==0);button(0,220,82,180,35,text(L"人机对战",L"Play vs AI",L"Jugar vs IA"),2,true,tab==1);button(0,410,82,180,35,text(L"规则与存档",L"Rules & saves",L"Reglas y datos"),3,true,tab==2);
+ textAt(0,580,89,165,24,text(L"语言 / Language",L"Language",L"Idioma"),smallFont,muted,DT_RIGHT|DT_SINGLELINE);
+ button(0,754,82,83,35,L"中文",4,true,language.load()==0);button(0,846,82,130,35,L"English",5,true,language.load()==1);button(0,985,82,165,35,L"Español",6,true,language.load()==2);
  if(tab==0)drawTrain(0);else if(tab==1)drawPlay(0);else drawHelp(0);drawInspector(0);svg<<"</svg>";std::ofstream(path)<<svg.str();
 }
 int main(int argc,char**argv){
  smallFont=16;normalFont=19;boldFont=1020;titleFont=1029;numberFont=1037;tab=1;
  std::string dest=argc>1?argv[1]:"/tmp/aa-preview";fs::create_directories(dest);
- haveGame=false;render(dest+"/gallery.svg");
+ haveGame=false;language=int(Language::Chinese);render(dest+"/gallery-zh.svg");require(svg.str().find("选择先后手")!=std::string::npos,"Chinese localization missing");
+ language=int(Language::English);render(dest+"/gallery-en.svg");require(svg.str().find("Choose who goes first")!=std::string::npos,"English localization missing");
+ language=int(Language::Spanish);render(dest+"/gallery-es.svg");require(svg.str().find("Elige quién empieza")!=std::string::npos,"Spanish localization missing");
+ language=int(Language::Chinese);
  newGame(false);render(dest+"/hand.svg");
  auto l=legal(duel.observe(0));applyDuel(l[0]);render(dest+"/own-offer.svg");
  newGame(true);applyDuel(legal(duel.observe(1))[0]);

@@ -13,6 +13,7 @@
 - CPU 多线程并行自对弈，可选 CUDA 梯度计算后端；
 - 存档校验、原子写入、`.bak` 备份恢复，以及模型、优化器、随机数和未完成批次的精确续训；
 - 可视化人机对战、卡牌说明、公开信息和胜负原因；
+- 完整支持简体中文、英语和西班牙语；默认中文，切换后会记住上次选择；
 - 8 张原创角色插画与程序绘制棋盘，不包含商业游戏的官方插画；
 - 覆盖规则结算、隐藏信息、存档、数值梯度、界面状态和“第 3 张亡命之徒”问题的自动测试。
 
@@ -33,9 +34,11 @@
 ## 普通玩家如何使用
 
 1. 进入本仓库的 **Releases** 页面；
-2. 下载 `AgentAvenueAI-Public-v2.1.0-Windows.zip`；
+2. 下载 `AgentAvenueAI-Public-v2.2.0-Windows.zip`；
 3. 解压整个压缩包，双击 `AgentAvenueAI.exe`；
 4. 点击“人机对战”。首次启动会自动导入压缩包内的预训练模型。
+
+程序默认显示简体中文。窗口顶部始终显示 **中文 / English / Español**，点击即可切换整个界面；选择会自动保存，下次启动继续使用上次的语言。
 
 以后程序会把可写存档保存在：
 
@@ -53,7 +56,7 @@ Windows 安装 Visual Studio 2022 的“使用 C++ 的桌面开发”和 CMake �
 powershell -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1
 ```
 
-生成文件为 `build\Release\agent_avenue_ai_lab.exe`。源码仓库不包含训练存档；如果没有把 `training.bin` 放在 EXE 旁边，程序会从随机模型开始。
+生成文件为 `build\Release\agent_avenue_ai_lab.exe`。CMake 会把冻结的公开模型 `models/pretrained-17m.bin` 自动复制到 EXE 旁边，并命名为 `training.bin`。
 
 Linux/macOS 可以构建并运行规则与核心测试：
 

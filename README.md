@@ -6,7 +6,7 @@
 
 **简体中文：** 一个面向《疯狂特务城》（*Agent Avenue*）标准双人基础玩法的开源桌游 AI 项目。项目使用 C++17 实现隐藏信息博弈和自对弈强化学习，提供 CUDA 加速训练、断点续训、模型评测，以及带原创角色插画的 Windows 可视化人机对战程序。[阅读完整中文说明 →](README.zh-CN.md)
 
-![Human versus AI interface with original illustrated cards](docs/screenshots/play-ui.png)
+![English human-versus-AI interface with original illustrated cards and visible language selector](docs/screenshots/play-ui-en.png)
 
 ## Highlights
 
@@ -15,6 +15,7 @@
 - Parallel CPU self-play plus an optional CUDA gradient backend loaded dynamically through the NVIDIA Driver API and NVRTC.
 - Atomic checkpoints, checksum validation, `.bak` recovery, and exact resume of model, optimizer, RNG, and partial batch state.
 - Human-vs-AI play with public information, outcome explanations, card inspection, and first-player switching.
+- Complete runtime localization in Simplified Chinese, English, and Spanish. Chinese is the default; the selected language is remembered across launches.
 - Eight original illustrated agents plus a programmatic board. No commercial game artwork is included.
 - Regression tests for rule outcomes, hidden-information isolation, serialization, gradients, UI transitions, and the reported third-Daredevil scenario.
 
@@ -35,9 +36,11 @@ See [docs/EVALUATION.md](docs/EVALUATION.md) for protocol and limitations.
 ## Download and play on Windows
 
 1. Open the repository's **Releases** page.
-2. Download `AgentAvenueAI-Public-v2.1.0-Windows.zip`.
+2. Download `AgentAvenueAI-Public-v2.2.0-Windows.zip`.
 3. Extract the whole archive and run `AgentAvenueAI.exe`.
-4. Open **人机对战** to play. The included `training.bin` is imported automatically on first launch.
+4. Open **人机对战 / Play vs AI / Jugar vs IA** to play. The included `training.bin` is imported automatically on first launch.
+
+The application starts in Simplified Chinese. Use the always-visible **中文 / English / Español** selector in the header to switch the whole interface; the choice is remembered for the next launch.
 
 The writable checkpoint is stored at:
 
@@ -55,7 +58,7 @@ Requirements: CMake 3.20+, a C++17 compiler, and Windows for the desktop applica
 powershell -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1
 ```
 
-The output is `build\Release\agent_avenue_ai_lab.exe`. A source build starts with random weights unless `training.bin` is placed beside the executable before first launch.
+The output is `build\Release\agent_avenue_ai_lab.exe`. CMake also copies the frozen public checkpoint from `models/pretrained-17m.bin` beside the executable as `training.bin`.
 
 To build and run the portable tests on Linux/macOS:
 
