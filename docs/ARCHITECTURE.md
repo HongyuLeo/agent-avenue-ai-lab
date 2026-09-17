@@ -1,17 +1,19 @@
 # Architecture
 
-The same `Game` state machine is used by training, evaluation, tests, and the Windows human-vs-AI interface. This keeps rule fixes from diverging between modes.
+## System at a glance
 
 ```mermaid
-flowchart TD
-    R[Game rules and hidden state] --> O[Player observation]
-    O --> N[Policy and value network]
-    N --> A[Legal masked action]
-    A --> R
-    R --> B[Parallel rollout batch]
-    B --> U[CPU or CUDA update]
-    U --> C[Atomic checkpoint]
+flowchart LR
+    A["Game simulator"] --> B["Parallel self-play"]
+    B --> C["Actor-critic training"]
+    C --> D["Policy and value checkpoint"]
+    D --> E["Evaluation and human vs AI"]
+    D -. "updated agent" .-> B
 ```
+
+The same `Game` state machine is used by training, evaluation, tests, and the Windows human-vs-AI interface. This keeps rule fixes from diverging between modes.
+
+Within a game, hidden state is converted into a player-specific 128-element observation. The policy/value network selects among legal masked actions. Parallel games form a rollout batch, the CPU or optional CUDA backend applies an update, and the complete training state is written to an atomic checkpoint.
 
 ## Components
 

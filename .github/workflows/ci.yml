@@ -49,6 +49,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create $env:GITHUB_REF_NAME AgentAvenueAI-Public-v2.2.1-Windows.zip `
-            --title "疯狂特务城 · 模型训练与人机对战 v2.2.1" `
+            --title "Agent Avenue AI v2.2.1 — Self-Play RL + Human-vs-AI Desktop App" `
             --notes-file docs\RELEASE_NOTES_v2.2.1.md `
             --latest
