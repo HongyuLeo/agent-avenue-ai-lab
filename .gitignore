@@ -1,0 +1,19 @@
+# Build output
+build/
+out/
+*.exe
+*.obj
+*.o
+*.pdb
+
+# Runtime checkpoints and logs
+training.bin
+training.bin.bak
+*.log
+
+# IDE / OS files
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

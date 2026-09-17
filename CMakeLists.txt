@@ -1,0 +1,33 @@
+cmake_minimum_required(VERSION 3.20)
+project(agent_avenue_ai_lab VERSION 2.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+find_package(Threads REQUIRED)
+
+add_executable(core_checks tests/core_checks.cpp)
+add_executable(fast_checks tests/fast_checks.cpp)
+target_link_libraries(fast_checks PRIVATE Threads::Threads)
+
+enable_testing()
+add_test(NAME core_checks COMMAND core_checks --test)
+add_test(NAME fast_checks COMMAND fast_checks)
+
+if(WIN32)
+  add_executable(agent_avenue_ai_lab WIN32 src/windows.cpp)
+  target_compile_definitions(agent_avenue_ai_lab PRIVATE UNICODE _UNICODE)
+  target_link_libraries(agent_avenue_ai_lab PRIVATE gdi32 user32 shell32 Threads::Threads)
+  if(MSVC)
+    target_compile_options(agent_avenue_ai_lab PRIVATE /utf-8 /O2)
+    target_link_options(agent_avenue_ai_lab PRIVATE /STACK:8388608)
+  else()
+    target_compile_options(agent_avenue_ai_lab PRIVATE -O2 -municode)
+    target_link_options(agent_avenue_ai_lab PRIVATE -static -municode -Wl,--stack,8388608)
+  endif()
+else()
+  add_executable(ui_checks tests/ui_checks.cpp)
+  target_link_libraries(ui_checks PRIVATE Threads::Threads)
+  add_test(NAME ui_checks COMMAND ui_checks)
+endif()
