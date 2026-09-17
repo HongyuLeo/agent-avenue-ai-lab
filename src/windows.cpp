@@ -196,7 +196,7 @@ void drawPlay(HDC dc){
  button(dc,700,130,172,42,L"导出本局记录",27,haveGame);
  textAt(dc,890,142,260,26,L"你 "+num(humanWins)+L" 胜 / "+num(humanLosses)+L" 负",smallFont,muted,DT_RIGHT|DT_SINGLELINE);
  if(!haveGame){
-  textAt(dc,35,213,1100,40,L"选择先手，开始一场可见的策略较量。",titleFont);
+  textAt(dc,35,213,1100,40,L"选择先后手，开始游戏。",titleFont);
   for(int k=0;k<K;k++){int x=38+(k%4)*283,y=292+(k/4)*293;card(dc,x,y,254,270,k,L"点击查看卡牌详情",400+k,true);}
   return;
  }
