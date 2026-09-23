@@ -14,7 +14,7 @@
 - directing the public edition's original visual identity and selecting the final card-art concepts;
 - preparing the trained checkpoint and release direction.
 
-At the recorded checkpoint, the training process had completed **17,366,354 self-play games** and **1,085,397 optimizer updates**.
+The public v2 Baseline completed **17,366,354 self-play games** and **1,085,397 optimizer updates**. The v3.1 recurrent-belief checkpoint later completed **22,287,872 self-play games** and **174,124 optimizer updates**.
 
 ## AI-assisted implementation
 
@@ -24,4 +24,4 @@ The project's main contribution is the complete engineering loop: turning game r
 
 ## Suggested portfolio wording
 
-> Led the design, training, validation, and release of a C++ self-play reinforcement-learning agent for a hidden-information board game. Defined rule semantics and product requirements, operated a 17.3M-game training run on RTX 4090 hardware, found and drove fixes for outcome/UI defects, and validated the saved policy against three baselines. Used AI coding tools as an implementation accelerator under my direction and review.
+> Led the design, training, validation, and release of a C++ self-play reinforcement-learning agent for a hidden-information board game. Defined rule semantics and product requirements, operated 17.3M-game feed-forward and 22.3M-game recurrent-belief training runs on RTX 4090 hardware, found and drove fixes for outcome/UI defects, and validated frozen policies against reproducible baselines. Used AI coding tools as an implementation accelerator under my direction and review.

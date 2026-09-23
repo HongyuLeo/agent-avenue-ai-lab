@@ -44,7 +44,26 @@ The public release checkpoint contains **17,366,354 self-play games** and **1,08
 
 See [docs/EVALUATION.md](docs/EVALUATION.md) for protocol and limitations.
 
-These are v2 results and are not claims about the short v3 smoke model.
+These values describe only the v2 feed-forward Baseline.
+
+## v3.1 long-run checkpoint
+
+The bundled recurrent-belief checkpoint contains **22,287,872 self-play games**
+and **174,124 optimizer updates**; its Saved Champion was selected at game
+**21,860,096**. A fresh frozen-model evaluation used 5,000 games per opponent,
+balanced across first and second player:
+
+| Opponent | Current v3.1 wins | Win rate |
+|---|---:|---:|
+| Uniform random | 4,294 / 5,000 | 85.88% |
+| Handwritten heuristic | 4,195 / 5,000 | 83.90% |
+| Fixed public v2 Baseline | 2,728 / 5,000 | **54.56%** |
+| Saved v3 Champion | 2,439 / 5,000 | 48.78% |
+
+The Saved v3 Champion separately scored 2,632 / 5,000 (**52.64%**) against the
+same fixed v2 Baseline. These results establish a modest advantage over this
+specific v2 checkpoint; they are not claims about expert human play or all
+possible opponents. See [docs/EVALUATION.md](docs/EVALUATION.md).
 
 ## Download and play on Windows
 
@@ -55,7 +74,11 @@ These are v2 results and are not claims about the short v3 smoke model.
 
 The application starts in Simplified Chinese. Use the always-visible **中文 / English / Español** selector in the header to switch the whole interface; the choice is remembered for the next launch.
 
-The bundled v2 Baseline remains `training.bin`. Writable v3 progress is stored separately at:
+The bundled v2 Baseline remains `training.bin`. The release also includes the
+validated long-run `training-v3.bin` and its `training-evaluations.csv`. On the
+first launch, the application imports them only when no local v3 checkpoint
+exists; an existing local checkpoint is never overwritten. Writable v3 progress
+is stored separately at:
 
 ```text
 %LOCALAPPDATA%\AgentAvenueAI\training-v3.bin
@@ -72,7 +95,7 @@ Requirements: CMake 3.20+, a C++17 compiler, and Windows for the desktop applica
 powershell -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1
 ```
 
-The output is `build\Release\agent_avenue_ai_lab.exe`. CMake copies the frozen v2 Baseline from `models/pretrained-17m.bin` beside the executable as `training.bin`. Build a portable ZIP with `scripts\package-windows.ps1`.
+The output is `build\Release\agent_avenue_ai_lab.exe`. CMake copies the frozen v2 Baseline from `models/pretrained-17m.bin` beside the executable as `training.bin`. Build a portable ZIP with `scripts\package-windows.ps1`. The optional `-V3Checkpoint` and `-TrainingLog` arguments bundle a long-run v3 checkpoint and CSV without committing either runtime artifact to Git.
 
 Run resumable v3 training outside the GUI with:
 
@@ -108,7 +131,7 @@ ctest --test-dir build --output-on-failure
 
 This repository implements only the standard two-player base mode. It does not implement team play, Black Market, or other expansions. Rule interpretations and known limitations are documented in the source and tests.
 
-## v3 status and measured evidence
+## v3 engineering evidence
 
 All old and new tests pass in the verified MSVC Release build. The CUDA parity
 test executed the complete v3 GRU/belief BPTT path on an RTX 4090 and measured a

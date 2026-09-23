@@ -32,7 +32,24 @@
 | 手写启发式策略 | 3,988 / 5,000 | 79.76% |
 | 已保存冠军快照 | 2,652 / 5,000 | 53.04% |
 
-详细方法和限制见 [docs/EVALUATION.md](docs/EVALUATION.md)。这些是 v2 长训结果，不是 v3 短时 smoke 模型的成绩。
+详细方法和限制见 [docs/EVALUATION.md](docs/EVALUATION.md)。这些数据只代表 v2 前馈 Baseline。
+
+## v3.1 长训模型
+
+随发布包提供的 recurrent-belief 存档已经完成 **22,287,872 局自对弈**和
+**174,124 次参数更新**，Saved Champion 产生于第 **21,860,096** 局。
+重新冻结模型后，每个对手独立测试 5,000 局并均衡先后手，结果如下：
+
+| 对手 | 当前 v3.1 获胜局数 | 胜率 |
+|---|---:|---:|
+| 随机策略 | 4,294 / 5,000 | 85.88% |
+| 手写启发式策略 | 4,195 / 5,000 | 83.90% |
+| 固定公开 v2 Baseline | 2,728 / 5,000 | **54.56%** |
+| v3 Saved Champion | 2,439 / 5,000 | 48.78% |
+
+Saved Champion 对同一个固定 v2 Baseline 的独立结果为 2,632 / 5,000，
+即 **52.64%**。这说明 v3 对这个特定 v2 checkpoint 有小幅、可重复评测的
+优势，但不能据此宣称达到人类高手水平或对所有对手都更强。
 
 ## 普通玩家如何使用
 
@@ -43,7 +60,10 @@
 
 程序默认显示简体中文。窗口顶部始终显示 **中文 / English / Español**，点击即可切换整个界面；选择会自动保存，下次启动继续使用上次的语言。
 
-发布包内的 `training.bin` 是只读 v2 Baseline。v3 可写存档单独保存在：
+发布包内的 `training.bin` 是只读 v2 Baseline，同时包含已经验证的
+`training-v3.bin` 和 `training-evaluations.csv`。首次启动时，程序只会在
+本机不存在 v3 存档的情况下导入它们，绝不会覆盖用户已有的训练进度。
+v3 可写存档单独保存在：
 
 ```text
 %LOCALAPPDATA%\AgentAvenueAI\training-v3.bin
@@ -59,7 +79,7 @@ Windows 安装 Visual Studio 2022 的“使用 C++ 的桌面开发”和 CMake �
 powershell -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1
 ```
 
-生成文件为 `build\Release\agent_avenue_ai_lab.exe`。CMake 会把冻结的 v2 Baseline `models/pretrained-17m.bin` 自动复制到 EXE 旁边并命名为 `training.bin`。运行 `scripts\package-windows.ps1` 可生成发布 ZIP。
+生成文件为 `build\Release\agent_avenue_ai_lab.exe`。CMake 会把冻结的 v2 Baseline `models/pretrained-17m.bin` 自动复制到 EXE 旁边并命名为 `training.bin`。运行 `scripts\package-windows.ps1` 可生成发布 ZIP；可选参数 `-V3Checkpoint` 和 `-TrainingLog` 用于把长训模型与 CSV 加入发布包，而不会把运行时存档提交到 Git。
 
 命令行继续 v3 训练：
 
@@ -83,11 +103,11 @@ policy/value/belief loss、belief accuracy、Brier score 和 ECE。胜率列使�
 `0` 到 `1` 的数值，例如 `0.35` 表示 35%。旧 v3.0 存档没有记录历史 v2 和
 Champion 曲线，因此这些旧行会留空；升级后的新评测会正常记录，绝不反推或伪造。
 
-## v3 实测状态
+## v3 工程验证
 
-MSVC Release 下全部旧测试和新测试均通过。一次 16 worker 的确定性 smoke run 前 256 局约 1,055 局/秒，重启后从 256 局继续到 320 局。四种消融仅训练了 64 局，只用于验证管线，不能说明棋力提升。详见 [实验](docs/V3_EXPERIMENTS.md)、[消融](docs/V3_ABLATIONS.md) 和 [已知限制](docs/V3_KNOWN_LIMITATIONS.md)。
+MSVC Release 下全部旧测试和新测试均通过。一次 16 worker 的确定性 smoke run 前 256 局约 1,055 局/秒，重启后从 256 局继续到 320 局。四种消融仅训练了 64 局，只用于验证管线；长期棋力结果使用上文单独重新运行的 5,000 局冻结模型评测。详见 [实验](docs/V3_EXPERIMENTS.md)、[消融](docs/V3_ABLATIONS.md) 和 [已知限制](docs/V3_KNOWN_LIMITATIONS.md)。
 
-v3 GRU/belief BPTT 已在 RTX 4090 上实机验证，并通过 CPU/CUDA 梯度一致性测试。1,024 局、16 worker、batch 128 的短时吞吐测试为 CPU 658.5 局/秒、CUDA 2,751.1 局/秒。这只是性能 smoke test，不是棋力提升证据；项目不会把短时 v3 结果伪装成已经超过 v2。
+v3 GRU/belief BPTT 已在 RTX 4090 上实机验证，并通过 CPU/CUDA 梯度一致性测试。1,024 局、16 worker、batch 128 的短时吞吐测试为 CPU 658.5 局/秒、CUDA 2,751.1 局/秒。这些吞吐数据仍然只是性能 smoke test；棋力结论只采用独立、冻结且均衡先后手的评测。
 
 Linux/macOS 可以构建并运行规则与核心测试：
 

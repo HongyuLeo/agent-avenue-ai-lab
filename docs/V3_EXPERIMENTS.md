@@ -11,6 +11,30 @@ The published v2 results remain the long-run reference: 85.28% vs Random,
 79.76% vs Handwritten Heuristic and 53.04% vs its Saved Champion over 5,000
 games per opponent. They are not relabeled as v3 results.
 
+## v3.1 long-run checkpoint
+
+The release checkpoint passed its internal checksum and metadata validation:
+
+- magic `AAIV3C01`, inner format 31;
+- 22,287,872 self-play games and 174,124 optimizer updates;
+- Saved Champion selected at game 21,860,096;
+- 100 stored evaluation rows and an 8-member opponent pool.
+
+A separate frozen-model evaluation used a fixed seed, 5,000 games per opponent
+and balanced first/second seats. The current v3 policy scored 85.88% vs Random,
+83.90% vs Handwritten Heuristic, 54.56% vs the fixed public v2 Baseline and
+48.78% vs the Saved v3 Champion. The Saved v3 Champion scored 52.64% vs v2.
+
+The final 200-game CSV row recorded 61.5% vs v2. Because that row is a much
+smaller sample, it remains visible in the audit log but is not used as the
+release headline. Across the 95 unique logged evaluation rows, the aggregate
+v3-v2 result was 9,333 / 19,000 (49.12%); those checkpoints span the training
+run and are not interchangeable with the final frozen policy.
+
+These figures support a narrow claim about this checkpoint under one fixed
+evaluation seed. Repeated seeds and confidence intervals are still required for
+a stronger playing-strength conclusion.
+
 ## v3 smoke measurements
 
 The complete ablation table is in `V3_ABLATIONS.md`. Wilson 95% intervals for
@@ -25,7 +49,8 @@ The checkpoint was 311,742 bytes and loaded in 0.668 ms. A separate deterministi
 16-worker training/resume smoke run completed 256 games at 1,054.7 games/s,
 saved, then resumed to 320 games at 1,094.5 games/s.
 
-No claim of v3 strength improvement is made.
+These early smoke measurements are retained as pipeline evidence and are not
+used to describe the long-run checkpoint above.
 
 ## CUDA training validation
 
@@ -66,5 +91,5 @@ Arguments are additional games, checkpoint path, self-play worker count,
 `auto|cpu|cuda`, games per update, and the CUDA samples-per-launch safety cap.
 The GUI uses automatic CUDA/CPU selection
 with the same typed checkpoint and can start, pause, autosave and resume without
-a command line. Long-run promotion requires repeated seeds and at least 5,000
-seat-balanced games per opponent; no such run has been completed here.
+a command line. Release evaluation uses at least 5,000 seat-balanced games per
+opponent. Repeated independent seeds remain future work.

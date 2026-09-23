@@ -12,9 +12,23 @@ format 3. Existing weights, optimizer state, RNG and training counters resume
 unchanged. Historical v2/Champion values absent from v3.0 remain blank; the
 application never fabricates them.
 
-The v3 recurrent-belief CUDA backend, automatic CPU fallback, safe checkpoint
+The Windows package includes a validated v3.1 recurrent-belief checkpoint with
+22,287,872 self-play games and 174,124 optimizer updates, plus its complete
+`training-evaluations.csv`. On first launch, the application imports the bundled
+checkpoint and log into `%LOCALAPPDATA%\AgentAvenueAI` only when no local v3
+checkpoint exists; it never overwrites existing training progress.
+
+A fresh frozen-model evaluation used a fixed seed and 5,000 games per opponent,
+balanced across first and second player. The current v3 policy scored 85.88%
+vs Random, 83.90% vs Handwritten Heuristic, 54.56% vs the fixed public v2
+Baseline and 48.78% vs its Saved v3 Champion. The Saved v3 Champion scored
+52.64% vs v2. The last 200-game training-log row was 61.5% vs v2, but that
+smaller sample is not used as the release result. These results describe one
+checkpoint and fixed seed; they are not claims of expert-human strength or a
+general solution.
+
+The recurrent-belief CUDA backend, automatic CPU fallback, safe checkpoint
 replacement, multilingual GUI and read-only v2 Baseline remain unchanged.
-Short evaluations are trend indicators and are not claims of playing strength.
 
 The CUDA GRU/BPTT path was validated on an RTX 4090 against the CPU path. If
 CUDA or NVRTC cannot be loaded, or a CUDA update fails, training automatically

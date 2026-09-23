@@ -42,13 +42,3 @@ jobs:
         with:
           name: AgentAvenueAI-Public-v3.1.0-Windows
           path: AgentAvenueAI-Public-v3.1.0-Windows.zip
-      - name: Publish tagged release
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create $env:GITHUB_REF_NAME AgentAvenueAI-Public-v3.1.0-Windows.zip `
-            --title "Agent Avenue AI v3.1.0" `
-            --notes-file docs\RELEASE_NOTES_v3.1.0.md `
-            --latest

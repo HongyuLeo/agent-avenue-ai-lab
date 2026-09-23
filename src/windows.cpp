@@ -470,18 +470,22 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
 int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
  HANDLE singleton=nullptr;
  try{
-  SetProcessDPIAware();wchar_t local[MAX_PATH],overridePath[MAX_PATH];DWORD overrideLength=GetEnvironmentVariableW(L"AGENT_AVENUE_DATA_DIR",overridePath,MAX_PATH);if(overrideLength&&overrideLength<MAX_PATH)saveDir=overridePath;else{require(SUCCEEDED(SHGetFolderPathW(nullptr,CSIDL_LOCAL_APPDATA,nullptr,SHGFP_TYPE_CURRENT,local)),"Cannot locate user data folder");saveDir=fs::path(local)/L"AgentAvenueAI";}fs::create_directories(saveDir);savePath=saveDir/L"training.bin";v3SavePath=saveDir/L"training-v3.bin";trainingLogPath=saveDir/L"training-evaluations.csv";languagePath=saveDir/L"language.txt";
+  SetProcessDPIAware();wchar_t local[MAX_PATH],overridePath[MAX_PATH],executable[MAX_PATH]{};DWORD overrideLength=GetEnvironmentVariableW(L"AGENT_AVENUE_DATA_DIR",overridePath,MAX_PATH);if(overrideLength&&overrideLength<MAX_PATH)saveDir=overridePath;else{require(SUCCEEDED(SHGetFolderPathW(nullptr,CSIDL_LOCAL_APPDATA,nullptr,SHGFP_TYPE_CURRENT,local)),"Cannot locate user data folder");saveDir=fs::path(local)/L"AgentAvenueAI";}fs::create_directories(saveDir);savePath=saveDir/L"training.bin";v3SavePath=saveDir/L"training-v3.bin";trainingLogPath=saveDir/L"training-evaluations.csv";languagePath=saveDir/L"language.txt";fs::path executableDir;DWORD executableLength=GetModuleFileNameW(nullptr,executable,MAX_PATH);if(executableLength&&executableLength<MAX_PATH)executableDir=fs::path(executable).parent_path();
   {std::ifstream in(languagePath,std::ios::binary);std::string code;if(in>>code){if(code=="en")language=int(Language::English);else if(code=="es")language=int(Language::Spanish);}}
   singleton=CreateMutexW(nullptr,TRUE,L"Local\\AgentAvenueAI-v1");if(GetLastError()==ERROR_ALREADY_EXISTS){MessageBoxW(nullptr,text(L"软件已经打开，请切换到已有窗口。",L"The app is already open. Switch to the existing window.",L"La aplicación ya está abierta. Cambia a la ventana existente.").c_str(),appTitle().c_str(),MB_OK);return 0;}
   if(fs::exists(savePath)){
    try{baselineTrainer=load(savePath);}
    catch(...){baselineTrainer.current=loadBaselineNet(savePath);baselineTrainer.champion=baselineTrainer.current;baselineTrainer.pool={baselineTrainer.current};}
   }else{
-   wchar_t executable[MAX_PATH]{};DWORD len=GetModuleFileNameW(nullptr,executable,MAX_PATH);
-   if(len&&len<MAX_PATH){auto starter=fs::path(executable).parent_path()/L"training.bin";if(fs::exists(starter)){try{baselineTrainer=load(starter);}catch(...){baselineTrainer.current=loadBaselineNet(starter);baselineTrainer.champion=baselineTrainer.current;baselineTrainer.pool={baselineTrainer.current};}}}
+   if(!executableDir.empty()){auto starter=executableDir/L"training.bin";if(fs::exists(starter)){try{baselineTrainer=load(starter);}catch(...){baselineTrainer.current=loadBaselineNet(starter);baselineTrainer.champion=baselineTrainer.current;baselineTrainer.pool={baselineTrainer.current};}}}
+  }
+  bool importedV3=false;
+  if(!fs::exists(v3SavePath)&&!executableDir.empty()){
+   auto starter=executableDir/L"training-v3.bin";
+   if(fs::exists(starter)){v3Trainer=loadV3(starter);saveV3(v3Trainer,v3SavePath);importedV3=true;auto starterLog=executableDir/L"training-evaluations.csv";if(!fs::exists(trainingLogPath)&&fs::exists(starterLog))fs::copy_file(starterLog,trainingLogPath);}
   }
   if(fs::exists(v3SavePath)){
-   try{v3Trainer=loadV3(v3SavePath);statusText={L"已恢复 v3 recurrent + belief 存档。",L"Restored the v3 recurrent + belief checkpoint.",L"Se restauró el checkpoint v3 recurrente + belief."};}
+   try{v3Trainer=loadV3(v3SavePath);statusText=importedV3?Localized{L"已导入随安装包提供的 v3 长训模型。",L"Imported the bundled long-run v3 checkpoint.",L"Se importó el checkpoint v3 entrenado incluido."}:Localized{L"已恢复 v3 recurrent + belief 存档。",L"Restored the v3 recurrent + belief checkpoint.",L"Se restauró el checkpoint v3 recurrente + belief."};}
    catch(...){auto backup=v3SavePath;backup+=L".bak";v3Trainer=loadV3(backup);auto damaged=v3SavePath;damaged+=L".damaged-"+std::to_wstring(GetTickCount64());fs::rename(v3SavePath,damaged);statusText={L"v3 主存档损坏，已从备份恢复；损坏文件已保留。",L"The v3 checkpoint was damaged; its backup was restored and the damaged file was kept.",L"El checkpoint v3 estaba dañado; se restauró la copia y se conservó el archivo."};}
   }
   savedGames=v3Trainer.games;
