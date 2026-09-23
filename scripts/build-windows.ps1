@@ -6,7 +6,7 @@ if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
 }
 
 cmake -S . -B build -A x64
-cmake --build build --config Release --target agent_avenue_ai_lab
+cmake --build build --config Release --parallel
 
 $exe = Join-Path (Get-Location) "build\Release\agent_avenue_ai_lab.exe"
 if (-not (Test-Path $exe)) { throw "Build completed but the EXE was not found at $exe" }

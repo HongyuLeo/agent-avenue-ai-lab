@@ -1,19 +1,21 @@
 # Architecture
 
-## System at a glance
-
-```mermaid
-flowchart LR
-    A["Game simulator"] --> B["Parallel self-play"]
-    B --> C["Actor-critic training"]
-    C --> D["Policy and value checkpoint"]
-    D --> E["Evaluation and human vs AI"]
-    D -. "updated agent" .-> B
-```
+This file describes the retained v2 Baseline. The v3 recurrent/belief path is
+documented in [V3_ARCHITECTURE.md](V3_ARCHITECTURE.md); both paths share the
+same `Game` rules engine.
 
 The same `Game` state machine is used by training, evaluation, tests, and the Windows human-vs-AI interface. This keeps rule fixes from diverging between modes.
 
-Within a game, hidden state is converted into a player-specific 128-element observation. The policy/value network selects among legal masked actions. Parallel games form a rollout batch, the CPU or optional CUDA backend applies an update, and the complete training state is written to an atomic checkpoint.
+```mermaid
+flowchart TD
+    R[Game rules and hidden state] --> O[Player observation]
+    O --> N[Policy and value network]
+    N --> A[Legal masked action]
+    A --> R
+    R --> B[Parallel rollout batch]
+    B --> U[CPU or CUDA update]
+    U --> C[Atomic checkpoint]
+```
 
 ## Components
 
@@ -35,4 +37,4 @@ The policy has 74 outputs: 64 ordered two-card offers, 8 hand-swap actions, and 
 
 ## Checkpoint guarantees
 
-`training.bin` stores weights, champion snapshot, RMSProp statistics, counters, evaluation history, partial gradients, and RNG state. Saves use a temporary file followed by replacement, retain a backup, and validate a checksum on load.
+The v2 `training.bin` stores weights, champion snapshot, RMSProp statistics, counters, evaluation history, partial gradients, and RNG state. It is read-only in the v3 application. Live v3 state uses `training-v3.bin` and the typed `AAIV3C01` format described in [V3_CHECKPOINT_MIGRATION.md](V3_CHECKPOINT_MIGRATION.md). Saves use a temporary file followed by replacement, retain a backup, and validate a checksum on load.

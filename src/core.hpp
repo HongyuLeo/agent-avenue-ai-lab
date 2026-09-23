@@ -11,8 +11,10 @@
 #include <sstream>
 #include <stdexcept>
 #include <vector>
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(AA_PREVIEW)
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <windows.h>
 #endif
 namespace aa {
@@ -213,7 +215,7 @@ inline Trainer unpack(const std::string&s){
  for(float w:t.current.w)require(std::isfinite(w),"Invalid model weights");return t;
 }
 inline void replaceFile(const std::filesystem::path&from,const std::filesystem::path&to){
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(AA_PREVIEW)
  require(MoveFileExW(from.c_str(),to.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=0,"Cannot commit checkpoint");
 #else
  std::filesystem::rename(from,to);
@@ -222,7 +224,7 @@ inline void replaceFile(const std::filesystem::path&from,const std::filesystem::
 inline void save(const Trainer&t,const std::filesystem::path&path){
  if(!path.parent_path().empty())std::filesystem::create_directories(path.parent_path());auto data=pack(t);auto tmp=path;tmp+=".tmp";auto backup=path;backup+=".bak";
  {std::ofstream o(tmp,std::ios::binary|std::ios::trunc);require(bool(o),"Cannot write save folder");o.write("AAITRN01",8);uint64_t n=data.size(),h=hash(data);put(o,n);put(o,h);o.write(data.data(),data.size());o.flush();require(bool(o),"Checkpoint write failed");}
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(AA_PREVIEW)
  HANDLE f=CreateFileW(tmp.c_str(),GENERIC_WRITE,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);require(f!=INVALID_HANDLE_VALUE,"Cannot flush save");BOOL ok=FlushFileBuffers(f);CloseHandle(f);require(ok,"Save flush failed");
 #endif
  if(std::filesystem::exists(path))std::filesystem::copy_file(path,backup,std::filesystem::copy_options::overwrite_existing);
@@ -230,5 +232,10 @@ inline void save(const Trainer&t,const std::filesystem::path&path){
 }
 inline Trainer load(const std::filesystem::path&p){
  std::ifstream i(p,std::ios::binary);require(bool(i),"Cannot open checkpoint");char magic[8]{};i.read(magic,8);require(bool(i)&&std::string(magic,8)=="AAITRN01","Wrong checkpoint type");uint64_t n,h;get(i,n);get(i,h);require(n<4000000,"Checkpoint too large");std::string s(n,' ');i.read(s.data(),n);require(bool(i)&&hash(s)==h,"Checkpoint damaged (checksum)");return unpack(s);
+}
+// Cross-toolchain read-only import for a v2 opponent. Full training resume still
+// uses load(), because optimizer and RNG state must not be silently discarded.
+inline Net loadBaselineNet(const std::filesystem::path&p){
+ std::ifstream i(p,std::ios::binary);require(bool(i),"Cannot open baseline checkpoint");char magic[8]{};i.read(magic,8);require(bool(i)&&std::string(magic,8)=="AAITRN01","Wrong baseline checkpoint type");uint64_t n,h;get(i,n);get(i,h);require(n<4000000,"Baseline checkpoint too large");std::string data(n,' ');i.read(data.data(),n);require(bool(i)&&hash(data)==h,"Baseline checkpoint damaged (checksum)");std::istringstream payload(data,std::ios::binary);uint32_t version=0;Net result;get(payload,version);require(version==1,"Incompatible baseline checkpoint version");get(payload,result);for(float value:result.w)require(std::isfinite(value),"Invalid baseline weights");return result;
 }
 } // namespace aa

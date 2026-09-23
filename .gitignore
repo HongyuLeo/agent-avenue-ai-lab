@@ -1,5 +1,9 @@
 # Build output
 build/
+build-*/
+work_test.cpp
+work_test.exe
+.tmp/
 out/
 *.exe
 *.obj
@@ -9,6 +13,9 @@ out/
 # Runtime checkpoints and logs
 training.bin
 training.bin.bak
+training-v3.bin
+training-v3.bin.bak
+training-evaluations.csv
 *.log
 
 # IDE / OS files
