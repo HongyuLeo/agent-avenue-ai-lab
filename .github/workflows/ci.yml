@@ -36,19 +36,9 @@ jobs:
           Copy-Item assets\cards artifact\assets\cards -Recurse
           Copy-Item models\pretrained-17m.bin artifact\training.bin
           Copy-Item LICENSE artifact\LICENSE.txt
-          Copy-Item docs\RELEASE_NOTES_v2.2.1.md artifact\README.txt
-          Compress-Archive -Path artifact\* -DestinationPath AgentAvenueAI-Public-v2.2.1-Windows.zip
+          Copy-Item docs\RELEASE_NOTES_v3.1.0.md artifact\README.txt
+          Compress-Archive -Path artifact\* -DestinationPath AgentAvenueAI-Public-v3.1.0-Windows.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: AgentAvenueAI-Public-v2.2.1-Windows
-          path: AgentAvenueAI-Public-v2.2.1-Windows.zip
-      - name: Publish tagged release
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create $env:GITHUB_REF_NAME AgentAvenueAI-Public-v2.2.1-Windows.zip `
-            --title "Agent Avenue AI v2.2.1 — Self-Play RL + Human-vs-AI Desktop App" `
-            --notes-file docs\RELEASE_NOTES_v2.2.1.md `
-            --latest
+          name: AgentAvenueAI-Public-v3.1.0-Windows
+          path: AgentAvenueAI-Public-v3.1.0-Windows.zip

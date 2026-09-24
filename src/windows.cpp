@@ -1,17 +1,24 @@
+#ifndef UNICODE
 #define UNICODE
+#endif
+#ifndef _UNICODE
 #define _UNICODE
+#endif
 #include "core.hpp"
+#include "v3_model.hpp"
+#include "v3_train.hpp"
 #ifndef AA_PREVIEW
 #include <shellapi.h>
 #include <shlobj.h>
 #include <gdiplus.h>
+#include "v3_cuda_backend.hpp"
 #else
 #include "preview_adapter.hpp"
 #endif
-#include "cuda_backend.hpp"
 #include <atomic>
 #include <chrono>
 #include <mutex>
+#include <memory>
 #include <thread>
 #include <iomanip>
 using namespace aa;
@@ -40,16 +47,16 @@ const Localized effects[K]={
 COLORREF accent[K]={RGB(35,116,112),RGB(110,83,162),RGB(29,117,176),RGB(186,95,61),RGB(172,59,69),RGB(48,133,103),RGB(166,125,33),RGB(103,110,129)};
 const COLORREF bg=RGB(241,244,248),ink=RGB(25,38,56),muted=RGB(96,112,131),blue=RGB(32,105,214),white=RGB(255,255,255);
 HWND windowHandle;HFONT smallFont,normalFont,boldFont,titleFont,numberFont;
-std::mutex mx;Trainer trainer;std::thread worker;
+std::mutex mx;Trainer baselineTrainer;V3Trainer v3Trainer;std::thread worker;
 std::atomic<bool> running{false},quit{false},evaluateNow{false},busyEval{false};
 std::atomic<bool> preferGpu{true},gpuActive{false};
 std::atomic<double> gamesPerSecond{0},samplesPerSecond{0};
 int trainingWorkers=std::max(1u,std::thread::hardware_concurrency()>2?std::thread::hardware_concurrency()-2:1);
 Localized computeText{L"高性能训练尚未启动",L"High-performance training has not started",L"El entrenamiento de alto rendimiento no ha comenzado"};
 Localized statusText{L"已就绪。点击开始训练，或直接进入人机对战。",L"Ready. Start training or go directly to Play vs AI.",L"Listo. Inicia el entrenamiento o juega directamente contra la IA."};
-fs::path saveDir,savePath,languagePath;std::atomic<uint64_t> savedGames{0};bool closing=false,threadFailed=false;
+fs::path saveDir,savePath,v3SavePath,trainingLogPath,languagePath;std::atomic<uint64_t> savedGames{0};bool closing=false,threadFailed=false;
 int tab=0;double rate=0;int chosenUp=-1,chosenDown=-1;bool playBest=false,haveGame=false;
-Net playNet;Game duel;std::mt19937 playRng(std::random_device{}());uint64_t playGeneration=0;
+V3Net playV3Net;V3Config playV3Config;std::unique_ptr<InformationState>playInformation;Game duel;std::mt19937 playRng(std::random_device{}());uint64_t playGeneration=0;
 int humanWins=0,humanLosses=0;std::vector<Localized>gameLog;
 constexpr int CANVAS_H=940;
 int inspectCard=-1;bool roundReview=false;uint64_t aiDue=0,revealAt=0;
@@ -151,7 +158,7 @@ void applyDuel(int a){
   (actor?std::wstring(L"AI"):std::wstring(L"你"))+L"亮出"+cardNames[a/8].zh+L"，另放一张暗牌。",
   (actor?std::wstring(L"The AI reveals "):std::wstring(L"You reveal "))+cardNames[a/8].en+L" and places another card face down.",
   (actor?std::wstring(L"La IA muestra "):std::wstring(L"Muestras "))+cardNames[a/8].es+L" y coloca otra carta boca abajo."});
- duel.step(a);
+ Game before=duel;duel.step(a);if(playInformation)playInformation->recordAfter(before,a,duel);
  if(recruit){
   for(int p=0;p<2;p++){int k=received[p];addLog({
    (p?std::wstring(L"AI"):std::wstring(L"你"))+L"获得第 "+num(duel.pile[p][k])+L" 张"+cardNames[k].zh+L"：移动 "+signedMove(duel.progress[p]-oldProgress[p])+L" 格（累计 "+std::to_wstring(duel.progress[p])+L"）。",
@@ -170,8 +177,8 @@ void applyDuel(int a){
 }
 void advanceAI(){scheduleAI();}
 void newGame(bool aiFirst){
- {std::lock_guard<std::mutex>lock(mx);playNet=playBest?trainer.champion:trainer.current;playGeneration=playBest?trainer.championAt:trainer.games;}
- duel.reset(playRng,aiFirst?1:0);haveGame=true;chosenUp=chosenDown=-1;gameLog.clear();endingLines.clear();
+ {std::lock_guard<std::mutex>lock(mx);playV3Net=playBest?v3Trainer.champion:v3Trainer.current;playV3Config=v3Trainer.config;playGeneration=playBest?v3Trainer.championAt:v3Trainer.games;}
+ duel.reset(playRng,aiFirst?1:0);playInformation=std::make_unique<InformationState>(duel);haveGame=true;chosenUp=chosenDown=-1;gameLog.clear();endingLines.clear();
  roundReview=false;inspectCard=-1;received={-1,-1};lastFace=lastHidden=-1;revealAt=0;
  addLog({
   L"新局开始："+(aiFirst?std::wstring(L"AI"):std::wstring(L"你"))+L"先手。模型训练局数 "+num(playGeneration)+L"。",
@@ -192,8 +199,8 @@ void card(HDC dc,int x,int y,int w,int h,int k,const std::wstring&label,int id,b
  if(id>=0)hits.push_back({r,id,enabled,k});
 }
 void drawTrain(HDC dc){
- uint64_t games,updates,best;Eval e;std::vector<std::array<float,3>>hist;std::wstring status,compute;
- {std::lock_guard<std::mutex>lock(mx);games=trainer.games;updates=trainer.updates;best=trainer.championAt;e=trainer.last;hist=trainer.history;status=statusText.get();compute=computeText.get();}
+ uint64_t games,updates,best;V3Eval e;V3Metrics metrics;std::vector<V3EvalRecord>hist;std::wstring status,compute;
+ {std::lock_guard<std::mutex>lock(mx);games=v3Trainer.games;updates=v3Trainer.updates;best=v3Trainer.championAt;e=v3Trainer.last;metrics=v3Trainer.metrics;hist=v3Trainer.history;status=statusText.get();compute=computeText.get();}
  box(dc,{30,130,1150,258},white,white);
  const int xx[]={52,330,608,886};const std::wstring labels[]={
   text(L"累计自博弈局数",L"Self-play games",L"Partidas de autojuego"),text(L"参数更新次数",L"Parameter updates",L"Actualizaciones"),
@@ -202,26 +209,28 @@ void drawTrain(HDC dc){
  button(dc,30,279,200,48,running?text(L"训练进行中",L"Training",L"Entrenando"):text(L"开始 / 继续训练",L"Start / resume training",L"Iniciar / continuar"),10,!running&&!closing,true);
  button(dc,245,279,175,48,text(L"暂停并保存",L"Pause and save",L"Pausar y guardar"),11,running&&!closing);
  button(dc,435,279,175,48,busyEval?text(L"正在评测…",L"Evaluating…",L"Evaluando…"):text(L"评测当前模型",L"Evaluate model",L"Evaluar modelo"),12,!busyEval&&!closing);
- button(dc,625,279,185,48,text(L"打开存档文件夹",L"Open save folder",L"Abrir carpeta"),13);
- button(dc,825,279,325,48,preferGpu?text(L"计算：自动优先 CUDA",L"Compute: prefer CUDA",L"Cálculo: priorizar CUDA"):text(L"计算：仅多核 CPU",L"Compute: multicore CPU",L"Cálculo: CPU multinúcleo"),14,!running);
+ button(dc,625,279,185,48,text(L"打开训练日志",L"Open training log",L"Abrir registro"),13);
+ button(dc,825,279,325,48,text(L"打开存档文件夹",L"Open save folder",L"Abrir carpeta de datos"),14);
  textAt(dc,32,344,1110,32,status,normalFont,muted);
  std::wstring speed=gamesPerSecond>0?text(L"速度：",L"Speed: ",L"Velocidad: ")+num(uint64_t(gamesPerSecond.load()))+text(L" 局/秒，",L" games/s, ",L" partidas/s, ")+num(uint64_t(samplesPerSecond.load()))+text(L" 样本/秒　",L" samples/s  ",L" muestras/s  "):L"";
  textAt(dc,32,374,1110,25,speed+compute,smallFont,gpuActive?RGB(25,133,91):muted);
  box(dc,{30,400,748,720},white,white);
- textAt(dc,52,420,620,27,text(L"训练评测记录",L"Evaluation history",L"Historial de evaluación"),boldFont);textAt(dc,52,452,650,22,text(L"蓝：对随机策略　绿：对固定策略（每项 200 局）",L"Blue: random · Green: heuristic (200 games each)",L"Azul: aleatoria · Verde: heurística (200 partidas)"),smallFont,muted);
+ textAt(dc,52,420,620,27,text(L"训练评测记录",L"Evaluation history",L"Historial de evaluación"),boldFont);textAt(dc,52,452,650,22,text(L"蓝 随机　绿 固定　红 v2 基线　金 v3 保留模型",L"Blue random · Green heuristic · Red v2 · Gold champion",L"Azul aleatoria · Verde heurística · Rojo v2 · Oro campeón"),smallFont,muted);
  int gx=80,gy=665,gw=620,gh=155;
  for(int i=0;i<3;i++){int y=gy-i*gh/2;line(dc,gx,y,gx+gw,y,RGB(227,233,241));textAt(dc,40,y-10,38,20,num(i*50)+L"%",smallFont,muted);}
  if(hist.empty())textAt(dc,160,555,470,40,text(L"完成首次评测后，这里显示实际胜率。",L"Win rates appear here after the first evaluation.",L"Las tasas de victoria aparecerán tras la primera evaluación."),normalFont,muted);
  else{
-  float maxx=std::max(1.f,hist.back()[0]);for(int series=1;series<=2;series++){COLORREF c=series==1?blue:RGB(33,147,119);
-   for(size_t i=0;i<hist.size();i++){int x=gx+int(gw*hist[i][0]/maxx),y=gy-int(gh*hist[i][series]);if(i){int px=gx+int(gw*hist[i-1][0]/maxx),py=gy-int(gh*hist[i-1][series]);line(dc,px,py,x,y,c,2);}box(dc,{x-3,y-3,x+4,y+4},c,c,4);}}
+  double maxx=std::max<uint64_t>(1,hist.back().games);const COLORREF colors[]={blue,RGB(33,147,119),RGB(196,63,68),RGB(184,132,24)};
+  for(int series=0;series<4;series++)for(size_t i=0;i<hist.size();i++){float rate=hist[i].rates[series];if(rate<0)continue;int x=gx+int(gw*hist[i].games/maxx),y=gy-int(gh*rate);if(i&&hist[i-1].rates[series]>=0){int px=gx+int(gw*hist[i-1].games/maxx),py=gy-int(gh*hist[i-1].rates[series]);line(dc,px,py,x,y,colors[series],2);}box(dc,{x-3,y-3,x+4,y+4},colors[series],colors[series],4);}
  }
  box(dc,{770,400,1150,720},white,white);textAt(dc,792,420,332,26,text(L"最近一次评测",L"Latest evaluation",L"Última evaluación"),boldFont);
  textAt(dc,792,468,320,32,text(L"对随机策略　",L"vs random  ",L"vs aleatoria  ")+pct(e.randomWins,e.games));
- textAt(dc,792,512,320,32,text(L"对固定策略　",L"vs heuristic  ",L"vs heurística  ")+pct(e.greedyWins,e.games));
- textAt(dc,792,556,320,32,text(L"对保留模型　",L"vs champion  ",L"vs campeón  ")+pct(e.championWins,e.games));
- textAt(dc,792,610,330,82,text(L"单次胜率有抽样波动。自博弈不保证持续变强；可在对战页亲自验证。",L"Each win rate has sampling noise. Self-play does not guarantee continuous improvement; verify it on the play tab.",L"Cada tasa tiene variación muestral. El autojuego no garantiza una mejora continua; compruébalo jugando."),smallFont,muted);
- textAt(dc,32,744,1110,42,text(L"多核并行自博弈 · CUDA 批量反向传播 · 不联网、不消耗 token · 自动保存",L"Parallel self-play · CUDA batch backprop · Offline · No tokens · Autosave",L"Autojuego paralelo · CUDA por lotes · Sin conexión · Sin tokens · Autoguardado"),smallFont,muted);
+ textAt(dc,792,506,320,30,text(L"对固定策略　",L"vs heuristic  ",L"vs heurística  ")+pct(e.heuristicWins,e.games));
+ textAt(dc,792,544,320,30,text(L"对 v2 基线　",L"vs v2 baseline  ",L"vs base v2  ")+pct(e.baselineWins,e.games));
+ textAt(dc,792,582,320,30,text(L"对保留模型　",L"vs champion  ",L"vs campeón  ")+pct(e.championWins,e.games));
+ std::wstring belief=metrics.handSamples?text(L"Belief 准确率：",L"Belief accuracy: ",L"Precisión belief: ")+pct(int(metrics.handCorrect),int(metrics.handSamples)):text(L"Belief：等待样本",L"Belief: awaiting samples",L"Belief: esperando muestras");
+ textAt(dc,792,622,330,28,belief,smallFont,muted);textAt(dc,792,653,330,45,text(L"短时胜率只用于烟雾测试，不代表棋力提升。",L"Short-run rates are smoke tests, not strength claims.",L"Las tasas cortas son pruebas, no mejoras de fuerza."),smallFont,muted);
+ textAt(dc,32,744,1110,42,text(L"v3 GRU + belief · CPU 自博弈 · CUDA/CPU 训练 · 离线 · 自动保存",L"v3 GRU + belief · CPU self-play · CUDA/CPU training · Offline · Autosave",L"v3 GRU + belief · Autojuego CPU · Entrenamiento CUDA/CPU · Sin conexión · Autoguardado"),smallFont,muted);
 }
 void drawBoard(HDC dc){
  box(dc,{30,253,350,612},white,white);drawArt(dc,9,75,265,230,320);
@@ -312,8 +321,8 @@ void drawInspector(HDC dc){
  if(supply[k]==1)textAt(dc,535,383,407,61,text(L"整副牌只有这一张，没有第 2、3 档效果。",L"Only one copy exists; there are no second- or third-copy effects.",L"Solo existe una copia; no hay efectos para la segunda o tercera."),normalFont,muted);
  if(haveGame)textAt(dc,535,557,407,81,text(L"当前已招募：\n你 ",L"Currently recruited:\nYou ",L"Reclutadas:\nTú ")+num(duel.pile[0][k])+text(L" 张　/　AI ",L" / AI ",L" / IA ")+num(duel.pile[1][k])+text(L" 张",L"",L""),boldFont);
  textAt(dc,233,656,710,164,text(
-  L"双方移动结束后，再统一检查胜负。\n如果同轮出现获胜与失败条件冲突，按官方规则由本轮出牌方获胜。\n你和 AI 的牌分别计算，不把双方数量相加。",
-  L"Win and loss conditions are checked after both players move.\nIf they conflict in the same round, the active player wins by the official rule.\nYour cards and the AI's cards are counted separately.",
+  L"双方移动结束后，再统一检查胜负。\n如果同轮出现获胜与失败条件冲突，按当前引擎规则由本轮出牌方获胜。\n你和 AI 的牌分别计算，不把双方数量相加。",
+  L"Win and loss conditions are checked after both players move.\nUnder the current engine rules, a same-round conflict is won by the active player.\nYour cards and the AI's cards are counted separately.",
   L"La victoria y la derrota se comprueban después de mover ambos.\nSi coinciden en la misma ronda, gana quien jugó la ronda.\nTus cartas y las de la IA se cuentan por separado."),normalFont,muted);
  textAt(dc,233,839,714,25,text(L"公开版使用本项目原创角色插画；不包含原作美术资产。",L"This public build uses original project artwork and contains no official game art.",L"Esta versión usa ilustraciones originales del proyecto, no arte oficial."),smallFont,muted);
 }
@@ -321,22 +330,28 @@ void drawHelp(HDC dc){
  box(dc,{30,130,1150,765},white,white);
  textAt(dc,54,152,1050,40,text(L"普通模式 · 使用说明",L"Standard mode · Instructions",L"Modo normal · Instrucciones"),titleFont);
  std::wstring s=text(
- L"开始训练\n默认使用多核 CPU 并行生成对局，并把批量梯度交给 NVIDIA CUDA GPU。界面显示实际局/秒和样本/秒。CUDA 不可用时自动回退多核 CPU，并显示具体原因。可暂停后切换计算模式。GitHub Release 随附预训练存档；若只构建源码且未放置 training.bin，则从随机模型开始。\n\n"
- L"保存与恢复\n程序每 10 秒自动保存；正常退出会完成当前一局并保存后关闭。下次启动自动读取模型、优化器、待更新梯度和随机状态。断电或强制结束只能恢复至最近一次成功保存；另保留一份备份。存档位于当前 Windows 用户的 LocalAppData / AgentAvenueAI。\n\n"
+ L"开始训练\nv3 使用多核 CPU 并行生成对局，并自动使用 CUDA 训练 GRU + belief 模型；CUDA 不可用或运行失败时会安全回退 CPU。界面显示实际局/秒、样本/秒和当前设备。发布包内 training.bin 是只读 v2 对照模型，v3 从独立随机初始化开始。\n\n"
+ L"保存与恢复\n程序每 10 秒自动保存；正常退出会完成当前批次并保存后关闭。下次启动自动读取 v3 模型、优化器、RNG、对手池和指标。断电或强制结束只能恢复至最近一次成功保存；另保留一份备份。v3 存档为 LocalAppData / AgentAvenueAI / training-v3.bin。\n\n"
  L"对战\n双方初始手牌 4 张。主动方出两张不同名称的牌，一明一暗；对方选一张，剩下的一张归主动方。出牌后立即补足手牌。若手牌全部同名，可出两张同名牌。每人整局最多弃牌换牌 4 次，牌库空时不能换牌。\n\n"
  L"胜负\n按这次招募后同名牌数量，执行第 1 / 2 / 3 档移动。第 4 张及以后仍按第 3 档。双方移动完才判胜负：追上对手，或收集 3 张解码专家即获胜；3 张亡命之徒则失败。冲突判定由主动方获胜。牌库耗尽且下一位无法出两张时，比较谁更接近追上对手，平手归主动方。\n\n"
- L"评测与范围\n每训练约 20,000 局自动评测，也可手动评测。各项 200 局，平衡先手与座位，结果有抽样误差。保留模型是通过对战门槛后保存的版本，并非已证明最优。此版本只含双人普通模式，不含黑市卡或扩展。",
- L"Training\nMulticore CPU workers generate games in parallel, while an NVIDIA CUDA GPU processes batch gradients. Live games/s and samples/s are shown. If CUDA is unavailable, the app falls back to multicore CPU and reports why. Pause before switching compute mode. The GitHub Release includes a pretrained checkpoint; source-only builds without training.bin start from random weights.\n\n"
- L"Save and resume\nThe app autosaves every 10 seconds. A normal exit completes the current game and saves before closing. The next launch restores the model, optimizer, pending gradients and random state. Power loss or forced termination can only restore the latest successful save; one backup is kept. Saves are stored in LocalAppData / AgentAvenueAI.\n\n"
+ L"评测与范围\n每训练约 20,000 局自动评测，也可手动评测。图表显示随机、固定策略、v2 基线和 v3 保留模型；完整数据写入 training-evaluations.csv。各项 200 局，平衡先手与座位，结果有抽样误差。保留模型是通过对战门槛后保存的版本，并非已证明最优。此版本只含双人普通模式，不含黑市卡或扩展。",
+ L"Training\nv3 uses multicore CPU workers for parallel self-play and automatically uses CUDA for GRU + belief training. It safely falls back to CPU when CUDA is unavailable or fails. Live games/s, samples/s and the active device are shown. Bundled training.bin is the read-only v2 comparison model; v3 starts from an independent seeded initialization.\n\n"
+ L"Save and resume\nThe app autosaves every 10 seconds. A normal exit completes the current batch and saves before closing. The next launch restores the v3 model, optimizer, RNG, opponent pool and metrics. Power loss or forced termination restores the latest successful save; one backup is kept at LocalAppData / AgentAvenueAI / training-v3.bin.bak.\n\n"
  L"Play\nEach player starts with 4 cards. The active player offers two differently named cards, one face up and one face down. The opponent chooses one; the other returns to the active player. The hand is refilled immediately. Two matching cards may be offered only when every card in hand has that name. Each player may swap a card up to 4 times per game.\n\n"
  L"Winning\nMovement uses the first, second or third-copy effect; later copies keep the third effect. Check results only after both players move. Catch the opponent or collect 3 Codebreakers to win; collecting 3 Daredevils loses. A same-round conflict is won by the active player. If the deck is exhausted, the closer player wins; a distance tie goes to the active player.\n\n"
- L"Evaluation and scope\nEvaluation runs about every 20,000 training games or on demand. Each matchup uses 200 balanced games and has sampling error. The champion is a checkpoint that passed a head-to-head threshold, not a proven optimum. This build covers only the standard two-player mode, without Black Market cards or expansions.",
- L"Entrenamiento\nVarios núcleos de CPU generan partidas en paralelo y una GPU NVIDIA CUDA procesa los gradientes por lotes. Se muestran partidas/s y muestras/s. Si CUDA no está disponible, se usa la CPU y se explica el motivo. Pausa antes de cambiar el modo de cálculo. La versión de GitHub incluye un modelo preentrenado; una compilación sin training.bin empieza con pesos aleatorios.\n\n"
- L"Guardado y reanudación\nLa aplicación guarda cada 10 segundos. Al cerrar normalmente, termina la partida actual y guarda el estado. El siguiente inicio restaura el modelo, optimizador, gradientes pendientes y estado aleatorio. Un corte de energía solo permite recuperar el último guardado correcto; también se conserva una copia de seguridad. Los datos están en LocalAppData / AgentAvenueAI.\n\n"
+ L"Evaluation and scope\nEvaluation runs about every 20,000 training games or on demand. The chart tracks random, heuristic, v2 Baseline and v3 Champion; complete data is written to training-evaluations.csv. Each matchup uses 200 balanced games and has sampling error. The champion is a checkpoint that passed a head-to-head threshold, not a proven optimum. This build covers only the standard two-player mode, without Black Market cards or expansions.",
+ L"Entrenamiento\nv3 usa varios núcleos de CPU para autojuego paralelo y CUDA automáticamente para entrenar GRU + belief. Si CUDA no está disponible o falla, vuelve de forma segura a CPU. Se muestran partidas/s, muestras/s y el dispositivo activo. training.bin es el modelo v2 de comparación; v3 parte de una inicialización independiente.\n\n"
+ L"Guardado y reanudación\nLa aplicación guarda cada 10 segundos. Al cerrar normalmente, termina el lote actual y guarda. El siguiente inicio restaura modelo v3, optimizador, RNG, rivales y métricas. Un corte recupera el último guardado; la copia está en LocalAppData / AgentAvenueAI / training-v3.bin.bak.\n\n"
  L"Partida\nCada jugador empieza con 4 cartas. Quien juega ofrece dos cartas de distinto nombre: una visible y otra oculta. El rival elige una y la restante vuelve a quien las ofreció. La mano se repone de inmediato. Solo se permiten dos cartas iguales si toda la mano tiene el mismo nombre. Cada jugador puede cambiar una carta hasta 4 veces por partida.\n\n"
  L"Victoria\nEl movimiento usa el efecto de la primera, segunda o tercera copia; las siguientes mantienen el tercero. El resultado se comprueba después de mover ambos jugadores. Alcanzar al rival o reunir 3 Criptógrafos da la victoria; reunir 3 Temerarios provoca la derrota. Si hay conflicto en la misma ronda, gana quien jugó. Al agotarse el mazo gana quien esté más cerca; el empate favorece a quien jugó.\n\n"
- L"Evaluación y alcance\nSe evalúa cada 20.000 partidas aproximadamente o de forma manual. Cada rival usa 200 partidas equilibradas y existe variación muestral. El modelo campeón superó un umbral directo, pero no es un óptimo demostrado. Esta versión solo incluye el modo normal para dos jugadores, sin cartas de Mercado Negro ni expansiones.");
+ L"Evaluación y alcance\nSe evalúa cada 20.000 partidas aproximadamente o de forma manual. El gráfico sigue aleatoria, heurística, base v2 y campeón v3; los datos completos se guardan en training-evaluations.csv. Cada rival usa 200 partidas equilibradas y existe variación muestral. El modelo campeón superó un umbral directo, pero no es un óptimo demostrado. Esta versión solo incluye el modo normal para dos jugadores, sin cartas de Mercado Negro ni expansiones.");
  textAt(dc,56,211,1058,508,s,smallFont,ink);
+}
+void writeTrainingLog(const V3Trainer& trainer){
+ auto temporary=trainingLogPath;temporary+=L".tmp";auto backup=trainingLogPath;backup+=L".bak";std::ofstream out(temporary,std::ios::binary|std::ios::trunc);require(bool(out),"Cannot write training evaluation log");
+ out<<"self_play_games,updates,champion_generation,evaluation_games,random_wins,random_rate,heuristic_wins,heuristic_rate,v2_baseline_wins,v2_baseline_rate,v3_champion_wins,v3_champion_rate,training_samples,hand_belief_samples,offer_belief_samples,policy_loss,value_loss,belief_loss,hand_accuracy,offer_accuracy,brier,ece,record_source\r\n"<<std::fixed<<std::setprecision(6);
+ for(const auto& point:trainer.history){out<<point.games<<','<<point.updates<<','<<point.championAt<<',';if(point.exactCounts)out<<point.evaluation.games;out<<',';if(point.exactCounts)out<<point.evaluation.randomWins;out<<',';if(point.rates[0]>=0)out<<point.rates[0];out<<',';if(point.exactCounts)out<<point.evaluation.heuristicWins;out<<',';if(point.rates[1]>=0)out<<point.rates[1];out<<',';if(point.exactCounts)out<<point.evaluation.baselineWins;out<<',';if(point.rates[2]>=0)out<<point.rates[2];out<<',';if(point.exactCounts)out<<point.evaluation.championWins;out<<',';if(point.rates[3]>=0)out<<point.rates[3];out<<','<<point.samples<<','<<point.handSamples<<','<<point.offerSamples<<','<<point.policyLoss<<','<<point.valueLoss<<','<<point.beliefLoss<<','<<point.handAccuracy<<','<<point.offerAccuracy<<','<<point.brier<<','<<point.ece<<','<<(point.exactCounts?"v3.1":"v3.0-migrated")<<"\r\n";}
+ out.flush();require(bool(out),"Training evaluation log write failed");out.close();if(fs::exists(trainingLogPath))fs::copy_file(trainingLogPath,backup,fs::copy_options::overwrite_existing);replaceFile(temporary,trainingLogPath);
 }
 #ifndef AA_PREVIEW
 std::wstring appTitle(){return text(L"疯狂特务城 · 模型训练与人机对战",L"Agent Avenue AI · Training and Play",L"Agent Avenue IA · Entrenamiento y partida");}
@@ -347,7 +362,7 @@ void chooseLanguage(Language value){language=int(value);saveLanguage();SetWindow
 void paint(HWND hwnd){
  PAINTSTRUCT ps;HDC target=BeginPaint(hwnd,&ps);RECT client;GetClientRect(hwnd,&client);HDC dc=CreateCompatibleDC(target);HBITMAP bitmap=CreateCompatibleBitmap(target,1180,CANVAS_H);auto old=SelectObject(dc,bitmap);
  HBRUSH brush=CreateSolidBrush(bg);RECT canvas{0,0,1180,CANVAS_H};FillRect(dc,&canvas,brush);DeleteObject(brush);hits.clear();
- textAt(dc,30,24,780,46,appTitle(),titleFont);textAt(dc,831,37,319,26,L"Agent Avenue AI  /  Public 2.2.1",smallFont,muted,DT_RIGHT|DT_SINGLELINE);
+ textAt(dc,30,24,780,46,appTitle(),titleFont);textAt(dc,831,37,319,26,L"Agent Avenue AI  /  v3.1.0",smallFont,muted,DT_RIGHT|DT_SINGLELINE);
  button(dc,30,82,180,35,text(L"训练与评测",L"Training",L"Entrenar"),1,true,tab==0);button(dc,220,82,180,35,text(L"人机对战",L"Play vs AI",L"Jugar vs IA"),2,true,tab==1);button(dc,410,82,180,35,text(L"规则与存档",L"Rules & saves",L"Reglas y datos"),3,true,tab==2);
  textAt(dc,580,89,165,24,text(L"语言 / Language",L"Language",L"Idioma"),smallFont,muted,DT_RIGHT|DT_SINGLELINE);
  button(dc,754,82,83,35,L"中文",4,true,language.load()==0);button(dc,846,82,130,35,L"English",5,true,language.load()==1);button(dc,985,82,165,35,L"Español",6,true,language.load()==2);
@@ -363,40 +378,25 @@ void paint(HWND hwnd){
  SelectObject(dc,old);DeleteObject(bitmap);DeleteDC(dc);EndPaint(hwnd,&ps);
 }
 void performSave(){
- std::lock_guard<std::mutex>lock(mx);save(trainer,savePath);savedGames=trainer.games;
+ std::lock_guard<std::mutex>lock(mx);saveV3(v3Trainer,v3SavePath);try{writeTrainingLog(v3Trainer);}catch(...){/* The checkpoint retains the log and retries after external file locks clear. */}savedGames=v3Trainer.games;
 }
 void background(){
  auto lastSave=std::chrono::steady_clock::now();bool wasRunning=false;
- CudaBackend cuda;bool cudaTried=false;uint64_t nextEvaluation=0;
+ uint64_t nextEvaluation=0;V3CudaBackend cuda;bool cudaReady=preferGpu&&cuda.init();
  try{
   for(;;){
    if(quit){performSave();PostMessageW(windowHandle,WM_APP+1,0,0);return;}
    if(running){
-    if(!preferGpu)cudaTried=false;
-    if(preferGpu&&!cudaTried){
-     cudaTried=true;{std::lock_guard<std::mutex>lock(mx);statusText={L"正在检测 CUDA 并编译 GPU 批量训练内核…",L"Detecting CUDA and compiling the GPU batch kernel…",L"Detectando CUDA y compilando el núcleo de GPU…"};}
-     bool ok=cuda.init();gpuActive=ok;std::string detail=ok?cuda.device():cuda.error();std::wstring wdetail(detail.begin(),detail.end());{std::lock_guard<std::mutex>lock(mx);computeText=ok?
-      Localized{L"CUDA："+wdetail,L"CUDA: "+wdetail,L"CUDA: "+wdetail}:
-      Localized{L"CUDA 不可用，已回退多核 CPU："+wdetail,L"CUDA unavailable; using multicore CPU: "+wdetail,L"CUDA no disponible; se usa CPU multinúcleo: "+wdetail};}
-    }
-    Trainer work;{std::lock_guard<std::mutex>lock(mx);work=trainer;if(!nextEvaluation)nextEvaluation=(trainer.games/20000+1)*20000;}
-    const int batchGames=std::max(256,trainingWorkers*16),updateChunks=std::max(1,batchGames/16);
-    auto begin=std::chrono::steady_clock::now();auto batch=collectBatch(work,work.rng,batchGames,trainingWorkers);
-    if(preferGpu&&cuda.ready()){
-     try{cuda.train(work,batch.samples,updateChunks);gpuActive=true;}
-     catch(const std::exception&e){std::string detail=e.what();std::wstring wdetail(detail.begin(),detail.end());{std::lock_guard<std::mutex>lock(mx);computeText={L"CUDA 批量失败，本批已改用多核 CPU："+wdetail,L"CUDA batch failed; this batch used multicore CPU: "+wdetail,L"Falló el lote CUDA; este lote usó CPU multinúcleo: "+wdetail};}cpuChunkedUpdate(work,batch.samples,updateChunks);gpuActive=false;preferGpu=false;}
-    }else{cpuChunkedUpdate(work,batch.samples,updateChunks);gpuActive=false;}
-    uint64_t before=work.games;work.games+=batch.games;work.batchGames=work.samples=0;work.gradient.fill(0);
-    if(before/2000!=work.games/2000){work.pool.push_back(work.current);if(work.pool.size()>8)work.pool.erase(work.pool.begin()+1);}
-    double elapsed=std::max(.001,std::chrono::duration<double>(std::chrono::steady_clock::now()-begin).count());gamesPerSecond=batch.games/elapsed;samplesPerSecond=batch.samples.size()/elapsed;
-    {std::lock_guard<std::mutex>lock(mx);trainer=std::move(work);statusText=gpuActive?
-     Localized{L"CUDA GPU 批量训练中；CPU 正在并行生成对局。",L"CUDA GPU is training batches while the CPU generates games in parallel.",L"La GPU CUDA entrena lotes mientras la CPU genera partidas en paralelo."}:
-     Localized{L"多核 CPU 训练中；CUDA 模式可在暂停后切换。",L"Training on multicore CPU; pause to switch back to CUDA.",L"Entrenando con CPU multinúcleo; pausa para volver a CUDA."};}
-    wasRunning=true;if(trainer.games>=nextEvaluation){evaluateNow=true;nextEvaluation=(trainer.games/20000+1)*20000;}
+    V3Trainer work;{std::lock_guard<std::mutex>lock(mx);work=v3Trainer;if(!nextEvaluation)nextEvaluation=(v3Trainer.games/20000+1)*20000;}
+    const int batchGames=std::max(1,work.config.batchGames);auto begin=std::chrono::steady_clock::now();uint64_t samplesBefore=work.metrics.samples;auto batch=collectV3Batch(work,work.rng,batchGames,trainingWorkers);bool usedCuda=false;
+    if(cudaReady){try{cuda.accumulate(work,batch.samples,false);finishV3Batch(work,batch.games);usedCuda=true;}catch(...){cudaReady=false;trainV3Batch(work,std::move(batch));}}else trainV3Batch(work,std::move(batch));
+    double elapsed=std::max(.001,std::chrono::duration<double>(std::chrono::steady_clock::now()-begin).count());gamesPerSecond=batchGames/elapsed;samplesPerSecond=(work.metrics.samples-samplesBefore)/elapsed;gpuActive=usedCuda;
+    std::wstring cudaName(cuda.device().begin(),cuda.device().end());{std::lock_guard<std::mutex>lock(mx);v3Trainer=std::move(work);computeText=usedCuda?Localized{L"v3 GRU + belief：CUDA（"+cudaName+L"）",L"v3 GRU + belief: CUDA ("+cudaName+L")",L"v3 GRU + belief: CUDA ("+cudaName+L")"}:Localized{L"v3 GRU + belief：多核 CPU（CUDA 自动回退）",L"v3 GRU + belief: multicore CPU (automatic CUDA fallback)",L"v3 GRU + belief: CPU multinúcleo (retorno automático de CUDA)"};statusText={L"v3 recurrent + belief 自博弈训练中。",L"Training v3 recurrent + belief self-play.",L"Entrenando autojuego v3 recurrente + belief."};}
+    wasRunning=true;if(v3Trainer.games>=nextEvaluation){evaluateNow=true;nextEvaluation=(v3Trainer.games/20000+1)*20000;}
    }else if(wasRunning){performSave();wasRunning=false;std::lock_guard<std::mutex>lock(mx);statusText={L"已暂停并保存。下次可从这里继续。",L"Paused and saved. You can resume from here.",L"Pausado y guardado. Puedes continuar desde aquí."};}
    if(evaluateNow.exchange(false)){
-    busyEval=true;Trainer snapshot;{std::lock_guard<std::mutex>lock(mx);snapshot=trainer;statusText={L"正在进行 600 局独立评测，训练暂时等待。",L"Running 600 independent evaluation games; training is waiting.",L"Ejecutando 600 partidas de evaluación; el entrenamiento está en espera."};}
-    Eval e=snapshot.evaluate(200);{std::lock_guard<std::mutex>lock(mx);trainer.record(e);statusText=running?
+    busyEval=true;V3Trainer snapshot;Net baseline;{std::lock_guard<std::mutex>lock(mx);snapshot=v3Trainer;baseline=baselineTrainer.current;statusText={L"正在进行固定种子、换座位的 v3 独立评测。",L"Running seeded, seat-balanced v3 evaluation.",L"Ejecutando evaluación v3 con semilla y asientos equilibrados."};}
+    V3Eval e=snapshot.evaluate(200,&baseline);{std::lock_guard<std::mutex>lock(mx);v3Trainer.record(e);statusText=running?
      Localized{L"评测完成，继续训练。胜率记录已更新。",L"Evaluation complete. Training resumed and win rates were updated.",L"Evaluación completada. El entrenamiento continúa y se actualizaron las tasas."}:
      Localized{L"评测完成。可以到人机对战页挑战当前模型。",L"Evaluation complete. Challenge the current model on the play tab.",L"Evaluación completada. Desafía al modelo actual en la pestaña de juego."};}
     busyEval=false;performSave();lastSave=std::chrono::steady_clock::now();
@@ -409,7 +409,7 @@ void background(){
  }catch(const std::exception&e){running=false;busyEval=false;std::string s=e.what();std::wstring ws(s.begin(),s.end());{std::lock_guard<std::mutex>lock(mx);statusText={L"保存或训练失败："+ws,L"Save or training failed: "+ws,L"Falló el guardado o entrenamiento: "+ws};}PostMessageW(windowHandle,WM_APP+2,0,0);}
 }
 void exportLog(){
- std::wstring logText=text(L"Agent Avenue AI 对局公开记录（v2.2.1）\r\n",L"Agent Avenue AI public game log (v2.2.1)\r\n",L"Registro público de partida de Agent Avenue IA (v2.2.1)\r\n");for(auto&v:gameLog)logText+=v.get()+L"\r\n";
+ std::wstring logText=text(L"Agent Avenue AI 对局公开记录（v3.1.0）\r\n",L"Agent Avenue AI public game log (v3.1.0)\r\n",L"Registro público de partida de Agent Avenue IA (v3.1.0)\r\n");for(auto&v:gameLog)logText+=v.get()+L"\r\n";
  logText+=text(L"\r\n最终公开招募数：\r\n",L"\r\nFinal recruited cards:\r\n",L"\r\nCartas reclutadas al final:\r\n");for(int k=0;k<K;k++)logText+=cardName(k)+text(L"：你 ",L": you ",L": tú ")+num(duel.pile[0][k])+L" / AI "+num(duel.pile[1][k])+L"\r\n";
  int n=WideCharToMultiByte(CP_UTF8,0,logText.data(),int(logText.size()),nullptr,0,nullptr,nullptr);std::string bytes(n,0);WideCharToMultiByte(CP_UTF8,0,logText.data(),int(logText.size()),bytes.data(),n,nullptr,nullptr);
  auto path=saveDir/L"last-game.txt";std::ofstream out(path,std::ios::binary);out<<"\xef\xbb\xbf"<<bytes;out.close();require(bool(out),"Cannot export game log");ShellExecuteW(windowHandle,L"open",path.c_str(),nullptr,nullptr,SW_SHOWNORMAL);
@@ -427,10 +427,8 @@ void click(int id){
  case 10:{running=true;std::lock_guard<std::mutex>lock(mx);statusText={L"正在进行本地自博弈训练。你可以切到对战页，或随时暂停。",L"Local self-play training is running. You may switch to play or pause at any time.",L"El entrenamiento local por autojuego está activo. Puedes jugar o pausar en cualquier momento."};break;}
  case 11:running=false;break;
  case 12:evaluateNow=true;break;
- case 13:ShellExecuteW(windowHandle,L"open",saveDir.c_str(),nullptr,nullptr,SW_SHOWNORMAL);break;
- case 14:preferGpu=!preferGpu;gpuActive=false;{std::lock_guard<std::mutex>lock(mx);computeText=preferGpu?
-  Localized{L"下次训练将自动检测 CUDA",L"CUDA will be detected when training resumes",L"CUDA se detectará al reanudar el entrenamiento"}:
-  Localized{L"已选择多核 CPU；暂停时可切回 CUDA",L"Multicore CPU selected; pause to switch back to CUDA",L"CPU multinúcleo seleccionada; pausa para volver a CUDA"};}break;
+ case 13:{std::lock_guard<std::mutex>lock(mx);writeTrainingLog(v3Trainer);ShellExecuteW(windowHandle,L"open",trainingLogPath.c_str(),nullptr,nullptr,SW_SHOWNORMAL);break;}
+ case 14:ShellExecuteW(windowHandle,L"open",saveDir.c_str(),nullptr,nullptr,SW_SHOWNORMAL);break;
  case 20:newGame(false);break;
  case 21:newGame(true);break;
  case 22:playBest=!playBest;break;
@@ -447,7 +445,7 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
  case WM_ERASEBKGND:return 1;
  case WM_TIMER:{
  bool redraw=wp==2&&tab==0;uint64_t now=clockMs();
- if(!closing&&inspectCard<0&&aiDue&&now>=aiDue){aiDue=0;try{if(haveGame&&!roundReview&&duel.winner<0&&duel.actor()==1){applyDuel(playNet.act(duel.observe(1),playRng));redraw=true;}}catch(const std::exception&e){std::string s=e.what();MessageBoxW(hwnd,std::wstring(s.begin(),s.end()).c_str(),text(L"AI 行动失败",L"AI action failed",L"Falló la acción de la IA").c_str(),MB_ICONERROR);}}
+ if(!closing&&inspectCard<0&&aiDue&&now>=aiDue){aiDue=0;try{if(haveGame&&!roundReview&&duel.winner<0&&duel.actor()==1&&playInformation){applyDuel(playV3Net.act(playInformation->view(1),playV3Config,playRng,true));redraw=true;}}catch(const std::exception&e){std::string s=e.what();MessageBoxW(hwnd,std::wstring(s.begin(),s.end()).c_str(),text(L"AI 行动失败",L"AI action failed",L"Falló la acción de la IA").c_str(),MB_ICONERROR);}}
  if(tab==1&&roundReview&&now<revealAt+1100)redraw=true;
  if(redraw)InvalidateRect(hwnd,nullptr,FALSE);return 0;}
  case WM_SIZE:InvalidateRect(hwnd,nullptr,FALSE);return 0;
@@ -472,17 +470,25 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){
 int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
  HANDLE singleton=nullptr;
  try{
-  SetProcessDPIAware();wchar_t local[MAX_PATH];require(SUCCEEDED(SHGetFolderPathW(nullptr,CSIDL_LOCAL_APPDATA,nullptr,SHGFP_TYPE_CURRENT,local)),"Cannot locate user data folder");saveDir=fs::path(local)/L"AgentAvenueAI";fs::create_directories(saveDir);savePath=saveDir/L"training.bin";languagePath=saveDir/L"language.txt";
+  SetProcessDPIAware();wchar_t local[MAX_PATH],overridePath[MAX_PATH],executable[MAX_PATH]{};DWORD overrideLength=GetEnvironmentVariableW(L"AGENT_AVENUE_DATA_DIR",overridePath,MAX_PATH);if(overrideLength&&overrideLength<MAX_PATH)saveDir=overridePath;else{require(SUCCEEDED(SHGetFolderPathW(nullptr,CSIDL_LOCAL_APPDATA,nullptr,SHGFP_TYPE_CURRENT,local)),"Cannot locate user data folder");saveDir=fs::path(local)/L"AgentAvenueAI";}fs::create_directories(saveDir);savePath=saveDir/L"training.bin";v3SavePath=saveDir/L"training-v3.bin";trainingLogPath=saveDir/L"training-evaluations.csv";languagePath=saveDir/L"language.txt";fs::path executableDir;DWORD executableLength=GetModuleFileNameW(nullptr,executable,MAX_PATH);if(executableLength&&executableLength<MAX_PATH)executableDir=fs::path(executable).parent_path();
   {std::ifstream in(languagePath,std::ios::binary);std::string code;if(in>>code){if(code=="en")language=int(Language::English);else if(code=="es")language=int(Language::Spanish);}}
   singleton=CreateMutexW(nullptr,TRUE,L"Local\\AgentAvenueAI-v1");if(GetLastError()==ERROR_ALREADY_EXISTS){MessageBoxW(nullptr,text(L"软件已经打开，请切换到已有窗口。",L"The app is already open. Switch to the existing window.",L"La aplicación ya está abierta. Cambia a la ventana existente.").c_str(),appTitle().c_str(),MB_OK);return 0;}
   if(fs::exists(savePath)){
-   try{trainer=load(savePath);statusText={L"已恢复训练存档。点击继续训练，或进入人机对战。",L"Training checkpoint restored. Resume training or play against the AI.",L"Se restauró el modelo. Continúa entrenando o juega contra la IA."};}
-   catch(...){auto backup=savePath;backup+=L".bak";trainer=load(backup);auto damaged=savePath;damaged+=L".damaged-"+std::to_wstring(GetTickCount64());fs::rename(savePath,damaged);statusText={L"主存档损坏，已从上一份备份恢复。损坏文件已保留。",L"The main checkpoint was damaged. The backup was restored and the damaged file was kept.",L"El archivo principal estaba dañado. Se restauró la copia de seguridad y se conservó el archivo dañado."};}
+   try{baselineTrainer=load(savePath);}
+   catch(...){baselineTrainer.current=loadBaselineNet(savePath);baselineTrainer.champion=baselineTrainer.current;baselineTrainer.pool={baselineTrainer.current};}
   }else{
-   wchar_t executable[MAX_PATH]{};DWORD len=GetModuleFileNameW(nullptr,executable,MAX_PATH);
-   if(len&&len<MAX_PATH){auto starter=fs::path(executable).parent_path()/L"training.bin";if(fs::exists(starter)){trainer=load(starter);statusText={L"已载入发布包提供的预训练模型；训练或退出后会保存到用户目录。",L"Loaded the pretrained model from the release; training or exit will save it to your user folder.",L"Se cargó el modelo preentrenado; al entrenar o salir se guardará en tu carpeta de usuario."};}}
+   if(!executableDir.empty()){auto starter=executableDir/L"training.bin";if(fs::exists(starter)){try{baselineTrainer=load(starter);}catch(...){baselineTrainer.current=loadBaselineNet(starter);baselineTrainer.champion=baselineTrainer.current;baselineTrainer.pool={baselineTrainer.current};}}}
   }
-  savedGames=trainer.games;
+  bool importedV3=false;
+  if(!fs::exists(v3SavePath)&&!executableDir.empty()){
+   auto starter=executableDir/L"training-v3.bin";
+   if(fs::exists(starter)){v3Trainer=loadV3(starter);saveV3(v3Trainer,v3SavePath);importedV3=true;auto starterLog=executableDir/L"training-evaluations.csv";if(!fs::exists(trainingLogPath)&&fs::exists(starterLog))fs::copy_file(starterLog,trainingLogPath);}
+  }
+  if(fs::exists(v3SavePath)){
+   try{v3Trainer=loadV3(v3SavePath);statusText=importedV3?Localized{L"已导入随安装包提供的 v3 长训模型。",L"Imported the bundled long-run v3 checkpoint.",L"Se importó el checkpoint v3 entrenado incluido."}:Localized{L"已恢复 v3 recurrent + belief 存档。",L"Restored the v3 recurrent + belief checkpoint.",L"Se restauró el checkpoint v3 recurrente + belief."};}
+   catch(...){auto backup=v3SavePath;backup+=L".bak";v3Trainer=loadV3(backup);auto damaged=v3SavePath;damaged+=L".damaged-"+std::to_wstring(GetTickCount64());fs::rename(v3SavePath,damaged);statusText={L"v3 主存档损坏，已从备份恢复；损坏文件已保留。",L"The v3 checkpoint was damaged; its backup was restored and the damaged file was kept.",L"El checkpoint v3 estaba dañado; se restauró la copia y se conservó el archivo."};}
+  }
+  savedGames=v3Trainer.games;
   auto font=[](int size,int weight){return CreateFontW(-size,0,0,0,weight,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Microsoft YaHei UI");};
   smallFont=font(16,FW_NORMAL);normalFont=font(19,FW_NORMAL);boldFont=font(20,FW_SEMIBOLD);titleFont=font(29,FW_BOLD);numberFont=font(37,FW_BOLD);
   WNDCLASSW wc{};wc.lpfnWndProc=proc;wc.hInstance=instance;wc.lpszClassName=L"AgentAvenueAIWindow";wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);wc.hIcon=LoadIconW(nullptr,IDI_APPLICATION);RegisterClassW(&wc);
